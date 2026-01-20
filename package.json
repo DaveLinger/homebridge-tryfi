@@ -1,0 +1,40 @@
+{
+  "name": "homebridge-tryfi",
+  "version": "1.0.0",
+  "description": "Homebridge plugin for TryFi Dog GPS Collars",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "tryfi",
+    "dog",
+    "gps",
+    "collar",
+    "pet tracker"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "homebridge": ">=1.6.0"
+  },
+  "author": "Dave Linger",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/homebridge-tryfi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/homebridge-tryfi/issues"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "homebridge": "^1.6.0",
+    "typescript": "^5.0.0"
+  }
+}

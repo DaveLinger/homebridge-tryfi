@@ -1,0 +1,77 @@
+{
+  "pluginAlias": "TryFi",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "TryFi",
+        "required": true
+      },
+      "username": {
+        "title": "TryFi Email",
+        "type": "string",
+        "required": true,
+        "format": "email",
+        "placeholder": "your@email.com",
+        "description": "Your TryFi account email address"
+      },
+      "password": {
+        "title": "TryFi Password",
+        "type": "string",
+        "required": true,
+        "placeholder": "password",
+        "description": "Your TryFi account password"
+      },
+      "pollingInterval": {
+        "title": "Polling Interval (seconds)",
+        "type": "integer",
+        "default": 60,
+        "minimum": 10,
+        "maximum": 300,
+        "description": "How often to poll TryFi API for updates (10-300 seconds)"
+      },
+      "escapeAlertType": {
+        "title": "Escape Alert Type",
+        "type": "string",
+        "default": "leak",
+        "oneOf": [
+          {
+            "title": "Leak Sensor (Critical Alert)",
+            "enum": ["leak"]
+          },
+          {
+            "title": "Motion Sensor (Standard Alert)",
+            "enum": ["motion"]
+          }
+        ],
+        "required": true,
+        "description": "Type of sensor for escape alerts. Leak sensor triggers critical notifications, motion sensor triggers standard notifications."
+      }
+    }
+  },
+  "layout": [
+    {
+      "type": "fieldset",
+      "title": "TryFi Account",
+      "expandable": false,
+      "items": [
+        "username",
+        "password"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Settings",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "pollingInterval",
+        "escapeAlertType"
+      ]
+    }
+  ]
+}
