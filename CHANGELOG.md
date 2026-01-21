@@ -2,23 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.0] - 2026-01-20
+## [1.1.0] - 2026-01-21
 
 ### Added
-- Initial release of homebridge-tryfi
-- Battery Service - Shows battery level and charging status for each collar
-- LED Light Control - Turn collar LED on/off
-- Lost Dog Mode Switch - Toggle high-frequency GPS tracking mode
-- Escape Alert Sensor - Configurable leak or motion sensor that triggers when dog is outside all safe zones AND alone
-- Automatic discovery of all TryFi collars on account
-- Configurable polling interval (10-300 seconds)
-- Support for multiple dogs with separate accessories per collar
-- GraphQL API client for TryFi backend
-- Homebridge Config UI X integration
+- **Ignored Pets**: New `ignoredPets` configuration option to exclude specific pets from HomeKit
+  - Add pet names to the ignore list in config
+  - Case-insensitive matching
+  - Ignored pets won't create HomeKit accessories
+  - Polling skips ignored pets to reduce API calls
+  - Example: Add `"Charlie"` to `ignoredPets` array to exclude Charlie
+
+### Configuration Example
+```json
+{
+  "platform": "TryFi",
+  "username": "your@email.com",
+  "password": "your_password",
+  "pollingInterval": 60,
+  "escapeAlertType": "leak",
+  "ignoredPets": ["Charlie", "Max"]
+}
+```
+
+## [1.0.0] - 2026-01-21
+
+### Added
+- Initial release
+- TryFi GPS collar integration with HomeKit
+- Escape alert sensor (leak or motion sensor)
+- Battery monitoring with low battery warnings
+- LED light control
+- Lost Dog Mode switch
+- Automatic polling for updates
+- Session-based authentication with cookie persistence
 
 ### Features
-- **Smart Escape Detection**: Only alerts when dog is BOTH outside safe zones AND not with owner
-- **Configurable Alert Type**: Choose between critical (leak sensor) or standard (motion sensor) notifications
-- **Full Collar Control**: Battery monitoring, LED control, and Lost Dog Mode activation
-- **Multi-Dog Support**: Each collar gets its own set of HomeKit accessories
-- **Reliable Polling**: Configurable update frequency with automatic retry on failure
+- Per-dog HomeKit accessories
+- Safe zone detection (escape alerts when outside safe zones AND not with owner)
+- Configurable polling interval (30-300 seconds)
+- Configurable escape alert type (leak sensor for critical alerts, motion sensor for standard)

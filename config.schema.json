@@ -6,7 +6,7 @@
     "type": "object",
     "properties": {
       "name": {
-        "title": "Name",
+        "title": "Platform Name",
         "type": "string",
         "default": "TryFi",
         "required": true
@@ -15,24 +15,21 @@
         "title": "TryFi Email",
         "type": "string",
         "required": true,
-        "format": "email",
-        "placeholder": "your@email.com",
-        "description": "Your TryFi account email address"
+        "placeholder": "your@email.com"
       },
       "password": {
         "title": "TryFi Password",
         "type": "string",
         "required": true,
-        "placeholder": "password",
-        "description": "Your TryFi account password"
+        "placeholder": "password"
       },
       "pollingInterval": {
         "title": "Polling Interval (seconds)",
         "type": "integer",
         "default": 60,
-        "minimum": 10,
+        "minimum": 30,
         "maximum": 300,
-        "description": "How often to poll TryFi API for updates (10-300 seconds)"
+        "description": "How often to check for updates (30-300 seconds, default: 60)"
       },
       "escapeAlertType": {
         "title": "Escape Alert Type",
@@ -48,29 +45,46 @@
             "enum": ["motion"]
           }
         ],
-        "required": true,
-        "description": "Type of sensor for escape alerts. Leak sensor triggers critical notifications, motion sensor triggers standard notifications."
+        "description": "How escape alerts appear in HomeKit"
+      },
+      "ignoredPets": {
+        "title": "Ignored Pets",
+        "type": "array",
+        "items": {
+          "type": "string",
+          "title": "Pet Name"
+        },
+        "description": "List of pet names to ignore (will not create HomeKit accessories or poll for updates)"
       }
     }
   },
   "layout": [
     {
-      "type": "fieldset",
-      "title": "TryFi Account",
-      "expandable": false,
+      "type": "flex",
+      "flex-flow": "row wrap",
       "items": [
         "username",
         "password"
       ]
     },
     {
-      "type": "fieldset",
-      "title": "Settings",
-      "expandable": true,
-      "expanded": false,
+      "type": "flex",
+      "flex-flow": "row wrap",
       "items": [
         "pollingInterval",
         "escapeAlertType"
+      ]
+    },
+    {
+      "key": "ignoredPets",
+      "type": "array",
+      "title": "Ignored Pets",
+      "description": "Add pet names to exclude from HomeKit (e.g., 'Charlie')",
+      "items": [
+        {
+          "type": "string",
+          "placeholder": "Pet name"
+        }
       ]
     }
   ]

@@ -8,6 +8,7 @@ export interface TryFiPlatformConfig extends PlatformConfig {
   password: string;
   pollingInterval?: number; // seconds, default 60
   escapeAlertType?: 'leak' | 'motion'; // default 'leak'
+  ignoredPets?: string[]; // pet names to ignore (case-insensitive)
 }
 
 /**

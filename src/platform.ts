@@ -67,7 +67,18 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
     try {
       // Login and get pets
       await this.tryfiApi.login();
-      const pets = await this.tryfiApi.getPets();
+      const allPets = await this.tryfiApi.getPets();
+
+      // Filter out ignored pets (case-insensitive)
+      const ignoredPets = (this.config.ignoredPets || []).map(name => name.toLowerCase());
+      const pets = allPets.filter(pet => !ignoredPets.includes(pet.name.toLowerCase()));
+
+      if (ignoredPets.length > 0) {
+        const ignoredCount = allPets.length - pets.length;
+        if (ignoredCount > 0) {
+          this.log.info(`Ignoring ${ignoredCount} pet(s) based on configuration`);
+        }
+      }
 
       this.log.info(`Discovered ${pets.length} TryFi collar(s)`);
 
@@ -175,7 +186,11 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
    */
   private async pollDevices() {
     try {
-      const pets = await this.tryfiApi.getPets();
+      const allPets = await this.tryfiApi.getPets();
+
+      // Filter out ignored pets (case-insensitive)
+      const ignoredPets = (this.config.ignoredPets || []).map(name => name.toLowerCase());
+      const pets = allPets.filter(pet => !ignoredPets.includes(pet.name.toLowerCase()));
 
       for (const pet of pets) {
         const accessory = this.collarAccessories.get(pet.petId);
