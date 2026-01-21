@@ -18,6 +18,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
 
+  public readonly config: TryFiPlatformConfig;
   public readonly accessories: PlatformAccessory[] = [];
   public readonly collarAccessories: Map<string, TryFiCollarAccessory> = new Map();
 
@@ -27,20 +28,23 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
 
   constructor(
     public readonly log: Logger,
-    public readonly config: TryFiPlatformConfig,
+    config: PlatformConfig,
     public readonly homebridgeApi: API,
   ) {
     this.Service = this.homebridgeApi.hap.Service;
     this.Characteristic = this.homebridgeApi.hap.Characteristic;
 
+    // Cast config to our platform config type
+    this.config = config as TryFiPlatformConfig;
+
     // Validate config
-    if (!config.username || !config.password) {
+    if (!this.config.username || !this.config.password) {
       this.log.error('TryFi username and password are required in config');
       throw new Error('Missing required config');
     }
 
     // Create API client
-    this.tryfiApi = new TryFiAPI(config.username, config.password, log);
+    this.tryfiApi = new TryFiAPI(this.config.username, this.config.password, log);
     this.api = this.tryfiApi; // Alias for accessory use
 
     this.log.debug('Finished initializing platform:', config.name);
