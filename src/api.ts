@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import { wrapper } from 'axios-cookiejar-support';
+import { CookieJar } from 'tough-cookie';
 import { Logger } from 'homebridge';
 import {
   TryFiSession,
@@ -13,6 +15,7 @@ import {
 export class TryFiAPI {
   private readonly apiUrl = 'https://api.tryfi.com';
   private readonly client: AxiosInstance;
+  private readonly jar: CookieJar;
   private session: TryFiSession | null = null;
 
   constructor(
@@ -20,14 +23,16 @@ export class TryFiAPI {
     private readonly password: string,
     private readonly log: Logger,
   ) {
-    this.client = axios.create({
+    // Create cookie jar to persist cookies like Python requests.Session()
+    this.jar = new CookieJar();
+    
+    // Wrap axios with cookie jar support
+    this.client = wrapper(axios.create({
       baseURL: this.apiUrl,
       timeout: 30000,
+      jar: this.jar,
       withCredentials: true,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    }));
   }
 
   /**
@@ -57,6 +62,9 @@ export class TryFiAPI {
         userId: response.data.userId,
         sessionId: response.data.sessionId,
       };
+
+      // Set JSON header for subsequent GraphQL requests (matches pytryfi.setHeaders())
+      this.client.defaults.headers.common['Content-Type'] = 'application/json';
 
       this.log.info('Successfully authenticated with TryFi');
     } catch (error) {
