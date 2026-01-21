@@ -12,7 +12,7 @@ import {
  * TryFi GraphQL API Client
  */
 export class TryFiAPI {
-  private readonly apiUrl = 'https://graph.tryfi.com/graphql';
+  private readonly apiUrl = 'https://api.tryfi.com/graphql';
   private readonly client: AxiosInstance;
   private session: TryFiSession | null = null;
 
