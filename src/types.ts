@@ -15,44 +15,34 @@ export interface TryFiPlatformConfig extends PlatformConfig {
  */
 export interface TryFiSession {
   userId: string;
-  token: string;
+  sessionId: string;
 }
 
 /**
- * TryFi Pet/Dog Data
+ * TryFi Pet Data (processed from API response)
  */
 export interface TryFiPet {
   petId: string;
   name: string;
   breed: string;
-  photoLink?: string;
-  device: TryFiDevice;
-  currLatitude: number;
-  currLongitude: number;
-  currPlaceName: string | null; // null when NOT in any safe zone
-  currPlaceAddress: string | null;
-  areaName: string | null;
-  connectedTo: string | null; // null when alone, owner name when with someone
-  lastUpdated?: string;
-}
-
-/**
- * TryFi Collar Device Data
- */
-export interface TryFiDevice {
-  deviceId: string;
+  moduleId: string;
   batteryPercent: number;
   isCharging: boolean;
-  ledOn: boolean;
-  isLost: boolean; // Lost Dog Mode status
-  buildId?: string;
+  ledEnabled: boolean;
+  mode: string; // 'NORMAL' or 'LOST_DOG'
+  connectedToUser: string | null; // firstName of user, null if not connected
+  latitude: number;
+  longitude: number;
+  areaName: string | null;
+  placeName: string | null; // Safe zone name, null when not in safe zone
+  placeAddress: string | null;
 }
 
 /**
  * GraphQL Response Wrapper
  */
 export interface GraphQLResponse<T> {
-  data: T;
+  data?: T;
   errors?: Array<{
     message: string;
     locations?: Array<{ line: number; column: number }>;
@@ -61,22 +51,68 @@ export interface GraphQLResponse<T> {
 }
 
 /**
- * Login Mutation Response
+ * CurrentUser Query Response - matches pytryfi structure
  */
-export interface LoginResponse {
-  login: {
-    userId: string;
-    token: string;
-  };
-}
-
-/**
- * Pets Query Response
- */
-export interface PetsResponse {
-  user: {
-    households: Array<{
-      pets: TryFiPet[];
+export interface CurrentUserResponse {
+  currentUser: {
+    __typename: string;
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    userHouseholds: Array<{
+      __typename: string;
+      household: {
+        __typename: string;
+        pets: Array<{
+          __typename: string;
+          id: string;
+          name: string;
+          homeCityState?: string;
+          gender?: string;
+          breed?: {
+            __typename: string;
+            id: string;
+            name: string;
+          };
+          device?: {
+            __typename: string;
+            id: string;
+            moduleId: string;
+            info: any; // JSON object with batteryPercent, isCharging, etc.
+            operationParams?: {
+              __typename: string;
+              mode: string;
+              ledEnabled: boolean;
+              ledOffAt?: string;
+            };
+            lastConnectionState?: {
+              __typename: string;
+              date: string;
+            } | {
+              __typename: 'ConnectedToUser';
+              date: string;
+              user: {
+                __typename: string;
+                id: string;
+                firstName: string;
+                lastName: string;
+              };
+            } | {
+              __typename: 'ConnectedToBase';
+              date: string;
+              chargingBase: {
+                __typename: string;
+                id: string;
+              };
+            } | {
+              __typename: 'ConnectedToCellular';
+              date: string;
+              signalStrengthPercent: number;
+            };
+          };
+        }>;
+      };
     }>;
   };
 }

@@ -22,6 +22,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   public readonly collarAccessories: Map<string, TryFiCollarAccessory> = new Map();
 
   public readonly tryfiApi: TryFiAPI;
+  public readonly api: TryFiAPI; // Alias for accessory use
   private pollingInterval?: NodeJS.Timeout;
 
   constructor(
@@ -40,6 +41,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
 
     // Create API client
     this.tryfiApi = new TryFiAPI(config.username, config.password, log);
+    this.api = this.tryfiApi; // Alias for accessory use
 
     this.log.debug('Finished initializing platform:', config.name);
 
@@ -178,7 +180,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
       for (const pet of pets) {
         const accessory = this.collarAccessories.get(pet.petId);
         if (accessory) {
-          accessory.updatePet(pet);
+          accessory.updatePetData(pet);
         }
       }
 

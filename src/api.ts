@@ -4,15 +4,14 @@ import {
   TryFiSession,
   TryFiPet,
   GraphQLResponse,
-  LoginResponse,
-  PetsResponse,
+  CurrentUserResponse,
 } from './types';
 
 /**
- * TryFi GraphQL API Client
+ * TryFi API Client - matches pytryfi implementation exactly
  */
 export class TryFiAPI {
-  private readonly apiUrl = 'https://graph.tryfi.com/graphql';
+  private readonly apiUrl = 'https://api.tryfi.com';
   private readonly client: AxiosInstance;
   private session: TryFiSession | null = null;
 
@@ -23,46 +22,40 @@ export class TryFiAPI {
   ) {
     this.client = axios.create({
       baseURL: this.apiUrl,
+      timeout: 30000,
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 30000,
     });
   }
 
   /**
-   * Login to TryFi and obtain session token
+   * Login using REST API (matches pytryfi)
    */
   async login(): Promise<void> {
-    const query = `
-      mutation Login($email: String!, $password: String!) {
-        login(email: $email, password: $password) {
-          userId
-          token
-        }
-      }
-    `;
-
     try {
-      const response = await this.client.post<GraphQLResponse<LoginResponse>>('', {
-        query,
-        variables: {
-          email: this.username,
-          password: this.password,
+      const formData = new URLSearchParams();
+      formData.append('email', this.username);
+      formData.append('password', this.password);
+
+      const response = await this.client.post('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
 
-      if (response.data.errors) {
-        throw new Error(`Login failed: ${response.data.errors[0].message}`);
+      if (response.data.error) {
+        throw new Error(`Login failed: ${response.data.error.message}`);
       }
 
-      if (!response.data.data?.login) {
+      if (!response.data.userId || !response.data.sessionId) {
         throw new Error('Login failed: No session data returned');
       }
 
       this.session = {
-        userId: response.data.data.login.userId,
-        token: response.data.data.login.token,
+        userId: response.data.userId,
+        sessionId: response.data.sessionId,
       };
 
       this.log.info('Successfully authenticated with TryFi');
@@ -73,35 +66,69 @@ export class TryFiAPI {
   }
 
   /**
-   * Get all pets for the authenticated user
+   * Get all pets using EXACT pytryfi query structure
    */
   async getPets(): Promise<TryFiPet[]> {
     await this.ensureAuthenticated();
 
+    // This matches pytryfi's QUERY_CURRENT_USER_FULL_DETAIL + fragments
     const query = `
-      query GetPets($userId: ID!) {
-        user(userId: $userId) {
-          households {
-            pets {
-              petId
-              name
-              breed
-              photoLink
-              device {
-                deviceId
-                batteryPercent
-                isCharging
-                ledOn
-                isLost
-                buildId
+      query {
+        currentUser {
+          __typename
+          id
+          email
+          firstName
+          lastName
+          userHouseholds {
+            __typename
+            household {
+              __typename
+              pets {
+                __typename
+                id
+                name
+                homeCityState
+                gender
+                breed {
+                  __typename
+                  id
+                  name
+                }
+                device {
+                  __typename
+                  id
+                  moduleId
+                  info
+                  operationParams {
+                    __typename
+                    mode
+                    ledEnabled
+                    ledOffAt
+                  }
+                  lastConnectionState {
+                    __typename
+                    date
+                    ... on ConnectedToUser {
+                      user {
+                        __typename
+                        id
+                        firstName
+                        lastName
+                      }
+                    }
+                    ... on ConnectedToBase {
+                      chargingBase {
+                        __typename
+                        id
+                      }
+                    }
+                    ... on ConnectedToCellular {
+                      signalStrengthPercent
+                    }
+                  }
+                }
               }
-              currLatitude
-              currLongitude
-              currPlaceName
-              currPlaceAddress
-              areaName
-              connectedTo
-              lastUpdated
             }
           }
         }
@@ -109,33 +136,59 @@ export class TryFiAPI {
     `;
 
     try {
-      const response = await this.client.post<GraphQLResponse<PetsResponse>>(
-        '',
-        {
-          query,
-          variables: {
-            userId: this.session!.userId,
-          },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.session!.token}`,
-          },
-        },
+      const response = await this.client.post<GraphQLResponse<CurrentUserResponse>>(
+        '/graphql',
+        { query },
       );
 
       if (response.data.errors) {
-        throw new Error(`Failed to get pets: ${response.data.errors[0].message}`);
+        throw new Error(`GraphQL error: ${response.data.errors[0].message}`);
       }
 
-      if (!response.data.data?.user?.households) {
+      if (!response.data.data?.currentUser?.userHouseholds) {
         return [];
       }
 
       // Flatten pets from all households
       const pets: TryFiPet[] = [];
-      for (const household of response.data.data.user.households) {
-        pets.push(...household.pets);
+      for (const userHousehold of response.data.data.currentUser.userHouseholds) {
+        if (userHousehold.household?.pets) {
+          for (const pet of userHousehold.household.pets) {
+            if (!pet.device) {
+              this.log.warn(`Pet ${pet.name} has no device, skipping`);
+              continue;
+            }
+
+            // Parse device info JSON object
+            const deviceInfo = pet.device.info || {};
+            const batteryPercent = parseInt(deviceInfo.batteryPercent) || 0;
+            const isCharging = deviceInfo.isCharging || false;
+
+            // Get location data for this pet
+            const location = await this.getPetLocation(pet.id);
+
+            // Determine connection status
+            const connectionState = pet.device.lastConnectionState;
+            const isCharging2 = connectionState?.__typename === 'ConnectedToBase';
+            const connectedToUser = 
+              connectionState?.__typename === 'ConnectedToUser'
+                ? (connectionState as any).user?.firstName || null
+                : null;
+
+            pets.push({
+              petId: pet.id,
+              name: pet.name,
+              breed: pet.breed?.name || 'Unknown',
+              moduleId: pet.device.moduleId,
+              batteryPercent,
+              isCharging: isCharging || isCharging2,
+              ledEnabled: pet.device.operationParams?.ledEnabled || false,
+              mode: pet.device.operationParams?.mode || 'NORMAL',
+              connectedToUser,
+              ...location,
+            });
+          }
+        }
       }
 
       this.log.debug(`Retrieved ${pets.length} pet(s) from TryFi`);
@@ -147,41 +200,147 @@ export class TryFiAPI {
   }
 
   /**
-   * Set LED light on/off
+   * Get pet location - matches pytryfi's getCurrentPetLocation
    */
-  async setLedState(petId: string, state: boolean): Promise<void> {
-    await this.ensureAuthenticated();
-
-    const mutation = `
-      mutation SetLed($petId: ID!, $state: Boolean!) {
-        setLedState(petId: $petId, on: $state) {
-          success
+  private async getPetLocation(petId: string): Promise<{
+    latitude: number;
+    longitude: number;
+    areaName: string | null;
+    placeName: string | null;
+    placeAddress: string | null;
+  }> {
+    const query = `
+      query {
+        pet(id: "${petId}") {
+          ongoingActivity {
+            __typename
+            start
+            areaName
+            ... on OngoingWalk {
+              positions {
+                __typename
+                date
+                position {
+                  __typename
+                  latitude
+                  longitude
+                }
+              }
+            }
+            ... on OngoingRest {
+              position {
+                __typename
+                latitude
+                longitude
+              }
+              place {
+                __typename
+                id
+                name
+                address
+              }
+            }
+          }
         }
       }
     `;
 
     try {
-      const response = await this.client.post(
-        '',
-        {
-          query: mutation,
-          variables: {
-            petId,
-            state,
-          },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.session!.token}`,
-          },
-        },
+      const response = await this.client.post<GraphQLResponse<any>>(
+        '/graphql',
+        { query },
       );
+
+      if (response.data.errors) {
+        this.log.warn(`Failed to get location for pet ${petId}:`, response.data.errors[0].message);
+        return {
+          latitude: 0,
+          longitude: 0,
+          areaName: null,
+          placeName: null,
+          placeAddress: null,
+        };
+      }
+
+      const activity = response.data.data?.pet?.ongoingActivity;
+      if (!activity) {
+        return {
+          latitude: 0,
+          longitude: 0,
+          areaName: null,
+          placeName: null,
+          placeAddress: null,
+        };
+      }
+
+      const areaName = activity.areaName || null;
+      let latitude = 0;
+      let longitude = 0;
+      let placeName = null;
+      let placeAddress = null;
+
+      if (activity.__typename === 'OngoingRest') {
+        latitude = activity.position?.latitude || 0;
+        longitude = activity.position?.longitude || 0;
+        placeName = activity.place?.name || null;
+        placeAddress = activity.place?.address || null;
+      } else if (activity.__typename === 'OngoingWalk' && activity.positions?.length > 0) {
+        const lastPosition = activity.positions[activity.positions.length - 1];
+        latitude = lastPosition.position?.latitude || 0;
+        longitude = lastPosition.position?.longitude || 0;
+      }
+
+      return { latitude, longitude, areaName, placeName, placeAddress };
+    } catch (error) {
+      this.log.warn(`Failed to get location for pet ${petId}:`, error);
+      return {
+        latitude: 0,
+        longitude: 0,
+        areaName: null,
+        placeName: null,
+        placeAddress: null,
+      };
+    }
+  }
+
+  /**
+   * Set LED on/off - matches pytryfi's turnOnOffLed
+   */
+  async setLedState(moduleId: string, ledEnabled: boolean): Promise<void> {
+    await this.ensureAuthenticated();
+
+    const mutation = `
+      mutation UpdateDeviceOperationParams($input: UpdateDeviceOperationParamsInput!) {
+        updateDeviceOperationParams(input: $input) {
+          __typename
+          id
+          moduleId
+          operationParams {
+            __typename
+            mode
+            ledEnabled
+            ledOffAt
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await this.client.post('/graphql', {
+        query: mutation,
+        variables: {
+          input: {
+            moduleId,
+            ledEnabled,
+          },
+        },
+      });
 
       if (response.data.errors) {
         throw new Error(`Failed to set LED: ${response.data.errors[0].message}`);
       }
 
-      this.log.debug(`Set LED ${state ? 'on' : 'off'} for pet ${petId}`);
+      this.log.debug(`Set LED ${ledEnabled ? 'on' : 'off'} for module ${moduleId}`);
     } catch (error) {
       this.log.error('Failed to set LED state:', error);
       throw error;
@@ -189,50 +348,51 @@ export class TryFiAPI {
   }
 
   /**
-   * Set Lost Dog Mode
+   * Set Lost Dog Mode - matches pytryfi's setLostDogMode
    */
-  async setLostDogMode(petId: string, isLost: boolean): Promise<void> {
+  async setLostDogMode(moduleId: string, isLost: boolean): Promise<void> {
     await this.ensureAuthenticated();
 
+    const mode = isLost ? 'LOST_DOG' : 'NORMAL';
+
     const mutation = `
-      mutation SetLostMode($petId: ID!, $isLost: Boolean!) {
-        setLostDogMode(petId: $petId, isLost: $isLost) {
-          success
+      mutation UpdateDeviceOperationParams($input: UpdateDeviceOperationParamsInput!) {
+        updateDeviceOperationParams(input: $input) {
+          __typename
+          id
+          moduleId
+          operationParams {
+            __typename
+            mode
+            ledEnabled
+            ledOffAt
+          }
         }
       }
     `;
 
     try {
-      const response = await this.client.post(
-        '',
-        {
-          query: mutation,
-          variables: {
-            petId,
-            isLost,
+      const response = await this.client.post('/graphql', {
+        query: mutation,
+        variables: {
+          input: {
+            moduleId,
+            mode,
           },
         },
-        {
-          headers: {
-            Authorization: `Bearer ${this.session!.token}`,
-          },
-        },
-      );
+      });
 
       if (response.data.errors) {
         throw new Error(`Failed to set lost mode: ${response.data.errors[0].message}`);
       }
 
-      this.log.info(`Set Lost Dog Mode ${isLost ? 'ON' : 'OFF'} for pet ${petId}`);
+      this.log.info(`Set Lost Dog Mode ${isLost ? 'ON' : 'OFF'} for module ${moduleId}`);
     } catch (error) {
       this.log.error('Failed to set lost dog mode:', error);
       throw error;
     }
   }
 
-  /**
-   * Ensure we have a valid session, login if needed
-   */
   private async ensureAuthenticated(): Promise<void> {
     if (!this.session) {
       await this.login();

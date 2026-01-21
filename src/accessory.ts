@@ -1,20 +1,16 @@
-import {
-  Service,
-  PlatformAccessory,
-  CharacteristicValue,
-} from 'homebridge';
+import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TryFiPlatform } from './platform';
 import { TryFiPet } from './types';
 
 /**
  * TryFi Collar Accessory
- * Represents a single dog's collar with multiple HomeKit services
+ * Represents a single dog collar with multiple HomeKit services
  */
 export class TryFiCollarAccessory {
-  private batteryService: Service;
-  private lightService: Service;
-  private lostModeSwitch: Service;
   private escapeAlertService: Service;
+  private batteryService: Service;
+  private lightbulbService: Service;
+  private lostDogSwitchService: Service;
 
   constructor(
     private readonly platform: TryFiPlatform,
@@ -22,261 +18,155 @@ export class TryFiCollarAccessory {
     private pet: TryFiPet,
   ) {
     // Set accessory information
-    this.accessory
-      .getService(this.platform.Service.AccessoryInformation)!
+    this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'TryFi')
-      .setCharacteristic(this.platform.Characteristic.Model, pet.breed || 'GPS Collar')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, pet.device.deviceId)
-      .setCharacteristic(
-        this.platform.Characteristic.FirmwareRevision,
-        pet.device.buildId || '1.0.0',
-      );
+      .setCharacteristic(this.platform.Characteristic.Model, 'GPS Dog Collar')
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, pet.moduleId)
+      .setCharacteristic(this.platform.Characteristic.FirmwareRevision, '1.0.0');
 
-    // Battery Service
-    this.batteryService =
-      this.accessory.getService(this.platform.Service.Battery) ||
-      this.accessory.addService(this.platform.Service.Battery);
-
-    this.batteryService.setCharacteristic(
-      this.platform.Characteristic.Name,
-      `${pet.name} Battery`,
-    );
-
-    this.batteryService
-      .getCharacteristic(this.platform.Characteristic.BatteryLevel)
-      .onGet(this.getBatteryLevel.bind(this));
-
-    this.batteryService
-      .getCharacteristic(this.platform.Characteristic.ChargingState)
-      .onGet(this.getChargingState.bind(this));
-
-    this.batteryService
-      .getCharacteristic(this.platform.Characteristic.StatusLowBattery)
-      .onGet(this.getLowBatteryStatus.bind(this));
-
-    // LED Light Service
-    this.lightService =
-      this.accessory.getService(this.platform.Service.Lightbulb) ||
-      this.accessory.addService(this.platform.Service.Lightbulb);
-
-    this.lightService.setCharacteristic(
-      this.platform.Characteristic.Name,
-      `${pet.name} Light`,
-    );
-
-    this.lightService
-      .getCharacteristic(this.platform.Characteristic.On)
-      .onGet(this.getLightState.bind(this))
-      .onSet(this.setLightState.bind(this));
-
-    // Lost Dog Mode Switch
-    this.lostModeSwitch =
-      this.accessory.getService(this.platform.Service.Switch) ||
-      this.accessory.addService(this.platform.Service.Switch);
-
-    this.lostModeSwitch.setCharacteristic(
-      this.platform.Characteristic.Name,
-      `${pet.name} Lost Mode`,
-    );
-
-    this.lostModeSwitch
-      .getCharacteristic(this.platform.Characteristic.On)
-      .onGet(this.getLostModeState.bind(this))
-      .onSet(this.setLostModeState.bind(this));
-
-    // Escape Alert Service (Leak Sensor or Motion Sensor based on config)
+    // Get or create services
     const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
     
-    if (escapeAlertType === 'motion') {
-      this.escapeAlertService =
-        this.accessory.getService(this.platform.Service.MotionSensor) ||
-        this.accessory.addService(this.platform.Service.MotionSensor);
-
-      this.escapeAlertService.setCharacteristic(
-        this.platform.Characteristic.Name,
-        `${pet.name} Escape Alert`,
-      );
-
-      this.escapeAlertService
-        .getCharacteristic(this.platform.Characteristic.MotionDetected)
-        .onGet(this.getEscapeAlertState.bind(this));
-    } else {
-      // Default to leak sensor
-      this.escapeAlertService =
-        this.accessory.getService(this.platform.Service.LeakSensor) ||
+    if (escapeAlertType === 'leak') {
+      this.escapeAlertService = this.accessory.getService(this.platform.Service.LeakSensor) ||
         this.accessory.addService(this.platform.Service.LeakSensor);
-
-      this.escapeAlertService.setCharacteristic(
-        this.platform.Characteristic.Name,
-        `${pet.name} Escape Alert`,
-      );
-
-      this.escapeAlertService
-        .getCharacteristic(this.platform.Characteristic.LeakDetected)
-        .onGet(this.getEscapeAlertState.bind(this));
+      this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
+    } else {
+      this.escapeAlertService = this.accessory.getService(this.platform.Service.MotionSensor) ||
+        this.accessory.addService(this.platform.Service.MotionSensor);
+      this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
     }
+
+    this.batteryService = this.accessory.getService(this.platform.Service.Battery) ||
+      this.accessory.addService(this.platform.Service.Battery);
+    this.batteryService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Battery`);
+
+    this.lightbulbService = this.accessory.getService(this.platform.Service.Lightbulb) ||
+      this.accessory.addService(this.platform.Service.Lightbulb);
+    this.lightbulbService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} LED Light`);
+
+    this.lostDogSwitchService = this.accessory.getService(this.platform.Service.Switch) ||
+      this.accessory.addService(this.platform.Service.Switch);
+    this.lostDogSwitchService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Lost Dog Mode`);
+
+    // Set up characteristic handlers
+    this.setupCharacteristics();
+
+    // Initial update
+    this.updateCharacteristics();
+  }
+
+  private setupCharacteristics() {
+    // LED Light handlers
+    this.lightbulbService.getCharacteristic(this.platform.Characteristic.On)
+      .onGet(this.handleLightGet.bind(this))
+      .onSet(this.handleLightSet.bind(this));
+
+    // Lost Dog Mode handlers
+    this.lostDogSwitchService.getCharacteristic(this.platform.Characteristic.On)
+      .onGet(this.handleLostModeGet.bind(this))
+      .onSet(this.handleLostModeSet.bind(this));
   }
 
   /**
-   * Update the accessory with fresh pet data
+   * Update all characteristics from latest pet data
    */
-  updatePet(pet: TryFiPet): void {
-    this.pet = pet;
+  updateCharacteristics() {
+    const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
+    
+    // Escape Alert: Triggered when NOT in safe zone AND NOT with owner
+    const isEscaped = (this.pet.placeName === null) && (this.pet.connectedToUser === null);
+    
+    if (escapeAlertType === 'leak') {
+      this.escapeAlertService.updateCharacteristic(
+        this.platform.Characteristic.LeakDetected,
+        isEscaped 
+          ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
+          : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
+      );
+    } else {
+      this.escapeAlertService.updateCharacteristic(
+        this.platform.Characteristic.MotionDetected,
+        isEscaped,
+      );
+    }
 
-    // Update all characteristic values
+    // Battery Service
     this.batteryService.updateCharacteristic(
       this.platform.Characteristic.BatteryLevel,
-      this.pet.device.batteryPercent,
+      this.pet.batteryPercent,
     );
 
     this.batteryService.updateCharacteristic(
       this.platform.Characteristic.ChargingState,
-      this.pet.device.isCharging
+      this.pet.isCharging
         ? this.platform.Characteristic.ChargingState.CHARGING
         : this.platform.Characteristic.ChargingState.NOT_CHARGING,
     );
 
     this.batteryService.updateCharacteristic(
       this.platform.Characteristic.StatusLowBattery,
-      this.pet.device.batteryPercent < 20
+      this.pet.batteryPercent < 20
         ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
         : this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL,
     );
 
-    this.lightService.updateCharacteristic(
+    // LED Light
+    this.lightbulbService.updateCharacteristic(
       this.platform.Characteristic.On,
-      this.pet.device.ledOn,
+      this.pet.ledEnabled,
     );
 
-    this.lostModeSwitch.updateCharacteristic(
+    // Lost Dog Mode
+    this.lostDogSwitchService.updateCharacteristic(
       this.platform.Characteristic.On,
-      this.pet.device.isLost,
+      this.pet.mode === 'LOST_DOG',
     );
 
-    // Update escape alert
-    const isEscaping = this.calculateEscapeAlert();
-    const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
-    
-    if (escapeAlertType === 'motion') {
-      this.escapeAlertService.updateCharacteristic(
-        this.platform.Characteristic.MotionDetected,
-        isEscaping,
-      );
-    } else {
-      this.escapeAlertService.updateCharacteristic(
-        this.platform.Characteristic.LeakDetected,
-        isEscaping
-          ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
-          : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
-      );
-    }
+    this.platform.log.debug(`Updated ${this.pet.name}: Battery ${this.pet.batteryPercent}%, ` +
+      `LED ${this.pet.ledEnabled ? 'On' : 'Off'}, Mode ${this.pet.mode}, ` +
+      `Escaped: ${isEscaped}, Place: ${this.pet.placeName}, With: ${this.pet.connectedToUser}`);
   }
 
   /**
-   * Calculate if dog is escaping (outside safe zone AND alone)
+   * Update pet data and refresh characteristics
    */
-  private calculateEscapeAlert(): boolean {
-    const isInSafeZone = this.pet.currPlaceName !== null;
-    const isWithOwner = this.pet.connectedTo !== null;
-    const isEscaping = !isInSafeZone && !isWithOwner;
-
-    if (isEscaping) {
-      this.platform.log.warn(
-        `🚨 ESCAPE ALERT: ${this.pet.name} is outside safe zones and alone!`,
-      );
-    }
-
-    return isEscaping;
+  updatePetData(pet: TryFiPet) {
+    this.pet = pet;
+    this.updateCharacteristics();
   }
 
-  /**
-   * Get battery level (0-100)
-   */
-  async getBatteryLevel(): Promise<CharacteristicValue> {
-    return this.pet.device.batteryPercent;
+  // LED Light Handlers
+  async handleLightGet(): Promise<CharacteristicValue> {
+    return this.pet.ledEnabled;
   }
 
-  /**
-   * Get charging state
-   */
-  async getChargingState(): Promise<CharacteristicValue> {
-    return this.pet.device.isCharging
-      ? this.platform.Characteristic.ChargingState.CHARGING
-      : this.platform.Characteristic.ChargingState.NOT_CHARGING;
-  }
-
-  /**
-   * Get low battery status
-   */
-  async getLowBatteryStatus(): Promise<CharacteristicValue> {
-    return this.pet.device.batteryPercent < 20
-      ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
-      : this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
-  }
-
-  /**
-   * Get LED light state
-   */
-  async getLightState(): Promise<CharacteristicValue> {
-    return this.pet.device.ledOn;
-  }
-
-  /**
-   * Set LED light state
-   */
-  async setLightState(value: CharacteristicValue): Promise<void> {
-    const state = value as boolean;
+  async handleLightSet(value: CharacteristicValue) {
+    const ledEnabled = value as boolean;
     try {
-      await this.platform.tryfiApi.setLedState(this.pet.petId, state);
-      this.pet.device.ledOn = state;
-      this.platform.log.info(`Set ${this.pet.name} LED to ${state ? 'ON' : 'OFF'}`);
+      await this.platform.api.setLedState(this.pet.moduleId, ledEnabled);
+      this.pet.ledEnabled = ledEnabled;
+      this.platform.log.info(`Set ${this.pet.name} LED to ${ledEnabled ? 'On' : 'Off'}`);
     } catch (error) {
       this.platform.log.error(`Failed to set LED for ${this.pet.name}:`, error);
-      throw new this.platform.homebridgeApi.hap.HapStatusError(
-        this.platform.homebridgeApi.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
-      );
+      throw new this.platform.homebridgeApi.hap.HapStatusError(this.platform.homebridgeApi.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
-  /**
-   * Get Lost Dog Mode state
-   */
-  async getLostModeState(): Promise<CharacteristicValue> {
-    return this.pet.device.isLost;
+  // Lost Dog Mode Handlers
+  async handleLostModeGet(): Promise<CharacteristicValue> {
+    return this.pet.mode === 'LOST_DOG';
   }
 
-  /**
-   * Set Lost Dog Mode state
-   */
-  async setLostModeState(value: CharacteristicValue): Promise<void> {
+  async handleLostModeSet(value: CharacteristicValue) {
     const isLost = value as boolean;
     try {
-      await this.platform.tryfiApi.setLostDogMode(this.pet.petId, isLost);
-      this.pet.device.isLost = isLost;
-      this.platform.log.info(
-        `Set ${this.pet.name} Lost Dog Mode to ${isLost ? 'ON' : 'OFF'}`,
-      );
+      await this.platform.api.setLostDogMode(this.pet.moduleId, isLost);
+      this.pet.mode = isLost ? 'LOST_DOG' : 'NORMAL';
+      this.platform.log.info(`Set ${this.pet.name} Lost Dog Mode to ${isLost ? 'On' : 'Off'}`);
     } catch (error) {
       this.platform.log.error(`Failed to set Lost Dog Mode for ${this.pet.name}:`, error);
-      throw new this.platform.homebridgeApi.hap.HapStatusError(
-        this.platform.homebridgeApi.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
-      );
-    }
-  }
-
-  /**
-   * Get Escape Alert state (for both leak sensor and motion sensor)
-   */
-  async getEscapeAlertState(): Promise<CharacteristicValue> {
-    const isEscaping = this.calculateEscapeAlert();
-    const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
-    
-    if (escapeAlertType === 'motion') {
-      return isEscaping;
-    } else {
-      return isEscaping
-        ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
-        : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED;
+      throw new this.platform.homebridgeApi.hap.HapStatusError(this.platform.homebridgeApi.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 }
