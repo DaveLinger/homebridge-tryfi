@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-01-21
+
+### Fixed
+- **Smart Error Handling**: Improved handling of transient API errors
+  - 502/503/504 errors now logged as warnings instead of errors
+  - Automatic re-authentication on 401/403 errors with immediate retry
+  - Cleaner log output for common transient failures
+  - Plugin continues polling even if TryFi API is temporarily unavailable
+  
+### Changed
+- Error messages are now more descriptive and actionable
+- Reduced log spam during temporary API outages
+
 ## [1.1.0] - 2026-01-21
 
 ### Added

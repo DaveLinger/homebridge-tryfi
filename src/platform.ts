@@ -161,8 +161,29 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
 
       // Start polling for updates
       this.startPolling();
-    } catch (error) {
-      this.log.error('Failed to discover TryFi devices:', error);
+    } catch (error: any) {
+      // Handle different error types during discovery
+      if (error.response?.status) {
+        const status = error.response.status;
+        
+        // Transient server errors - warn and start polling anyway (will retry)
+        if (status === 502 || status === 503 || status === 504) {
+          this.log.warn(`TryFi API temporarily unavailable (${status}) during startup`);
+          this.log.warn('Will continue to retry during polling');
+          this.startPolling(); // Start polling anyway, will retry
+          return;
+        }
+        
+        // Authentication errors
+        if (status === 401 || status === 403) {
+          this.log.error('Authentication failed - please check your username and password');
+          return;
+        }
+        
+        this.log.error(`Failed to discover TryFi devices (HTTP ${status}):`, error.message);
+      } else {
+        this.log.error('Failed to discover TryFi devices:', error.message || error);
+      }
     }
   }
 
@@ -204,8 +225,46 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
       }
 
       this.log.debug(`Updated ${pets.length} collar(s)`);
-    } catch (error) {
-      this.log.error('Failed to poll TryFi API:', error);
+    } catch (error: any) {
+      // Handle different error types appropriately
+      if (error.response?.status) {
+        const status = error.response.status;
+        
+        // Transient server errors (502, 503, 504) - just warn and retry next interval
+        if (status === 502 || status === 503 || status === 504) {
+          this.log.warn(`TryFi API temporarily unavailable (${status}), will retry on next poll`);
+          return;
+        }
+        
+        // Authentication errors (401, 403) - try to re-authenticate
+        if (status === 401 || status === 403) {
+          this.log.warn('Authentication expired, attempting to re-login...');
+          try {
+            await this.tryfiApi.login();
+            this.log.info('Successfully re-authenticated with TryFi');
+            // Try polling again immediately after re-auth
+            const allPets = await this.tryfiApi.getPets();
+            const ignoredPets = (this.config.ignoredPets || []).map(name => name.toLowerCase());
+            const pets = allPets.filter(pet => !ignoredPets.includes(pet.name.toLowerCase()));
+            for (const pet of pets) {
+              const accessory = this.collarAccessories.get(pet.petId);
+              if (accessory) {
+                accessory.updatePetData(pet);
+              }
+            }
+            this.log.debug(`Updated ${pets.length} collar(s) after re-auth`);
+          } catch (reAuthError) {
+            this.log.error('Failed to re-authenticate with TryFi:', reAuthError);
+          }
+          return;
+        }
+        
+        // Other HTTP errors
+        this.log.error(`TryFi API error (${status}):`, error.message);
+      } else {
+        // Network errors, timeouts, etc.
+        this.log.error('Failed to poll TryFi API:', error.message || error);
+      }
     }
   }
 
