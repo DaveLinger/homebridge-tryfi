@@ -9,7 +9,7 @@ import {
 } from 'homebridge';
 import { TryFiAPI } from './api';
 import { TryFiCollarAccessory } from './accessory';
-import { TryFiPlatformConfig } from './types';
+import { TryFiPlatformConfig, TryFiPet } from './types';
 
 /**
  * TryFi Platform Plugin
@@ -25,6 +25,10 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   public readonly tryfiApi: TryFiAPI;
   public readonly api: TryFiAPI; // Alias for accessory use
   private pollingInterval?: NodeJS.Timeout;
+  
+  // Escape alert hysteresis tracking (in-memory only, resets on restart)
+  private escapeCounters: Map<string, number> = new Map();
+  private quickCheckTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(
     public readonly log: Logger,
@@ -221,6 +225,9 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
         const accessory = this.collarAccessories.get(pet.petId);
         if (accessory) {
           accessory.updatePetData(pet);
+          
+          // Handle escape alert hysteresis
+          this.handleEscapeDetection(pet);
         }
       }
 
@@ -250,6 +257,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
               const accessory = this.collarAccessories.get(pet.petId);
               if (accessory) {
                 accessory.updatePetData(pet);
+                this.handleEscapeDetection(pet);
               }
             }
             this.log.debug(`Updated ${pets.length} collar(s) after re-auth`);
@@ -269,11 +277,111 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   }
 
   /**
+   * Handle escape detection with hysteresis (debouncing)
+   * Prevents false alarms from GPS drift by requiring multiple consecutive detections
+   */
+  private handleEscapeDetection(pet: TryFiPet) {
+    // Check if pet is escaped (out of zone AND not with anyone)
+    const isEscaped = (pet.placeName === null && pet.connectedToUser === null);
+    
+    const currentCount = this.escapeCounters.get(pet.petId) || 0;
+    const confirmationsRequired = this.config.escapeConfirmations || 2;
+    
+    if (isEscaped) {
+      // Potential escape detected - increment counter
+      const newCount = currentCount + 1;
+      this.escapeCounters.set(pet.petId, newCount);
+      
+      this.log.debug(
+        `${pet.name} out of zone (${newCount}/${confirmationsRequired} confirmations)`,
+      );
+      
+      if (newCount >= confirmationsRequired) {
+        // Threshold reached - escape confirmed
+        // Accessory will handle the actual alert state update
+        this.log.info(`${pet.name} escape confirmed after ${newCount} check(s)`);
+      } else {
+        // Not confirmed yet - schedule quick re-check
+        this.scheduleQuickCheck(pet.petId, pet.name);
+      }
+    } else {
+      // Pet is safe (in zone OR with someone) - reset counter
+      const hadCount = currentCount > 0;
+      this.escapeCounters.set(pet.petId, 0);
+      this.cancelQuickCheck(pet.petId);
+      
+      if (hadCount) {
+        this.log.debug(`${pet.name} back in safe state, reset escape counter`);
+      }
+    }
+  }
+
+  /**
+   * Schedule a quick check for a specific pet
+   * Used during escape detection to re-verify faster than normal polling
+   */
+  private scheduleQuickCheck(petId: string, petName: string) {
+    // Don't schedule if already scheduled
+    if (this.quickCheckTimeouts.has(petId)) {
+      return;
+    }
+    
+    const interval = (this.config.escapeCheckInterval || 30) * 1000;
+    
+    this.log.debug(`Scheduling quick check for ${petName} in ${interval / 1000}s`);
+    
+    const timeout = setTimeout(async () => {
+      this.log.debug(`Running quick check for ${petName}`);
+      
+      // Remove from timeouts map
+      this.quickCheckTimeouts.delete(petId);
+      
+      // Poll just this one pet
+      try {
+        const allPets = await this.tryfiApi.getPets();
+        const pet = allPets.find(p => p.petId === petId);
+        
+        if (pet) {
+          const accessory = this.collarAccessories.get(petId);
+          if (accessory) {
+            accessory.updatePetData(pet);
+            
+            // Handle escape detection (may schedule another quick check)
+            this.handleEscapeDetection(pet);
+          }
+        }
+      } catch (error: any) {
+        this.log.warn(`Quick check failed for ${petName}:`, error.message || error);
+        // Counter will remain, next normal poll will try again
+      }
+    }, interval);
+    
+    this.quickCheckTimeouts.set(petId, timeout);
+  }
+
+  /**
+   * Cancel any pending quick check for a pet
+   */
+  private cancelQuickCheck(petId: string) {
+    const timeout = this.quickCheckTimeouts.get(petId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.quickCheckTimeouts.delete(petId);
+    }
+  }
+
+  /**
    * Stop polling when platform is shutting down
    */
   shutdown() {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
+    
+    // Cancel all pending quick checks
+    for (const timeout of this.quickCheckTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.quickCheckTimeouts.clear();
   }
 }

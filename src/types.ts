@@ -9,6 +9,8 @@ export interface TryFiPlatformConfig extends PlatformConfig {
   pollingInterval?: number; // seconds, default 60
   escapeAlertType?: 'leak' | 'motion'; // default 'leak'
   ignoredPets?: string[]; // pet names to ignore (case-insensitive)
+  escapeConfirmations?: number; // consecutive out-of-zone readings required, default 2
+  escapeCheckInterval?: number; // seconds between quick checks, default 30
 }
 
 /**

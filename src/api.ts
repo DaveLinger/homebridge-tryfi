@@ -17,6 +17,15 @@ export class TryFiAPI {
   private readonly client: AxiosInstance;
   private readonly jar: CookieJar;
   private session: TryFiSession | null = null;
+  
+  // Cache last known good location data to avoid false escape alerts on timeouts
+  private locationCache: Map<string, {
+    latitude: number;
+    longitude: number;
+    areaName: string | null;
+    placeName: string | null;
+    placeAddress: string | null;
+  }> = new Map();
 
   constructor(
     private readonly username: string,
@@ -170,14 +179,19 @@ export class TryFiAPI {
             // Parse device info JSON object
             const deviceInfo = pet.device.info || {};
             const batteryPercent = parseInt(deviceInfo.batteryPercent) || 0;
-            const isCharging = deviceInfo.isCharging || false;
+            
+            // Detect charging from battery chip data
+            // batteryAverageCurrentMa > 0 means current flowing INTO battery (charging)
+            // batteryAverageCurrentMa < 0 means current flowing OUT (discharging)
+            // bq27421Info is null when collar is not on charger
+            const bq27421Info = deviceInfo.bq27421Info;
+            const isCharging = (bq27421Info?.batteryAverageCurrentMa ?? 0) > 0;
 
             // Get location data for this pet
             const location = await this.getPetLocation(pet.id);
 
             // Determine connection status
             const connectionState = pet.device.lastConnectionState;
-            const isCharging2 = connectionState?.__typename === 'ConnectedToBase';
             const connectedToUser = 
               connectionState?.__typename === 'ConnectedToUser'
                 ? (connectionState as any).user?.firstName || null
@@ -189,7 +203,7 @@ export class TryFiAPI {
               breed: pet.breed?.name || 'Unknown',
               moduleId: pet.device.moduleId,
               batteryPercent,
-              isCharging: isCharging || isCharging2,
+              isCharging,
               ledEnabled: pet.device.operationParams?.ledEnabled || false,
               mode: pet.device.operationParams?.mode || 'NORMAL',
               connectedToUser,
@@ -209,6 +223,7 @@ export class TryFiAPI {
 
   /**
    * Get pet location - matches pytryfi's getCurrentPetLocation
+   * Returns cached data on timeout/error to prevent false escape alerts
    */
   private async getPetLocation(petId: string): Promise<{
     latitude: number;
@@ -298,14 +313,44 @@ export class TryFiAPI {
         longitude = lastPosition.position?.longitude || 0;
       }
 
-      return { latitude, longitude, areaName, placeName, placeAddress };
-    } catch (error) {
-      this.log.warn(`Failed to get location for pet ${petId}:`, error);
+      const locationData = { latitude, longitude, areaName, placeName, placeAddress };
+      
+      // Cache this successful location data
+      this.locationCache.set(petId, locationData);
+      
+      return locationData;
+    } catch (error: any) {
+      // Handle different error types for location queries
+      if (error.code === 'ECONNABORTED') {
+        // Timeout errors - common when TryFi API is slow
+        this.log.debug(`Location query timed out for pet ${petId}, using cached/default location`);
+      } else if (error.response?.status) {
+        const status = error.response.status;
+        // Transient server errors
+        if (status === 502 || status === 503 || status === 504) {
+          this.log.debug(`Location API temporarily unavailable for pet ${petId} (${status})`);
+        } else {
+          this.log.warn(`Failed to get location for pet ${petId} (HTTP ${status})`);
+        }
+      } else {
+        // Other errors - log message only, not full error object
+        this.log.warn(`Failed to get location for pet ${petId}: ${error.message || 'Unknown error'}`);
+      }
+      
+      // Return cached data if available, otherwise return safe defaults
+      // IMPORTANT: Using cached placeName prevents false escape alerts on timeouts
+      const cached = this.locationCache.get(petId);
+      if (cached) {
+        this.log.debug(`Using cached location for pet ${petId}`);
+        return cached;
+      }
+      
+      // No cache available - return defaults (first time seeing this pet)
       return {
         latitude: 0,
         longitude: 0,
         areaName: null,
-        placeName: null,
+        placeName: null,  // null is safe here - no previous data to rely on
         placeAddress: null,
       };
     }

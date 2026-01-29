@@ -11,6 +11,9 @@ export class TryFiCollarAccessory {
   private batteryService: Service;
   private lightbulbService: Service;
   private lostDogSwitchService: Service;
+  
+  // Track last escape state to avoid redundant HomeKit updates
+  private lastEscapeState?: boolean;
 
   constructor(
     private readonly platform: TryFiPlatform,
@@ -77,18 +80,31 @@ export class TryFiCollarAccessory {
     // Escape Alert: Triggered when NOT in safe zone AND NOT with owner
     const isEscaped = (this.pet.placeName === null) && (this.pet.connectedToUser === null);
     
-    if (escapeAlertType === 'leak') {
-      this.escapeAlertService.updateCharacteristic(
-        this.platform.Characteristic.LeakDetected,
-        isEscaped 
-          ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
-          : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
-      );
-    } else {
-      this.escapeAlertService.updateCharacteristic(
-        this.platform.Characteristic.MotionDetected,
-        isEscaped,
-      );
+    // Only update HomeKit if escape state changed (prevents redundant notifications)
+    if (this.lastEscapeState !== isEscaped) {
+      if (escapeAlertType === 'leak') {
+        this.escapeAlertService.updateCharacteristic(
+          this.platform.Characteristic.LeakDetected,
+          isEscaped 
+            ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
+            : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
+        );
+      } else {
+        this.escapeAlertService.updateCharacteristic(
+          this.platform.Characteristic.MotionDetected,
+          isEscaped,
+        );
+      }
+      
+      this.lastEscapeState = isEscaped;
+      
+      // Log state changes
+      if (isEscaped) {
+        this.platform.log.warn(`🚨 ${this.pet.name} has ESCAPED!`);
+      } else if (this.lastEscapeState === true) {
+        // Only log "back safe" if was previously escaped
+        this.platform.log.info(`✅ ${this.pet.name} is back in safe zone`);
+      }
     }
 
     // Battery Service

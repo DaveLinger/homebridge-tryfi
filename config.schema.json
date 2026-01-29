@@ -55,6 +55,22 @@
           "title": "Pet Name"
         },
         "description": "List of pet names to ignore (will not create HomeKit accessories or poll for updates)"
+      },
+      "escapeConfirmations": {
+        "title": "Escape Confirmations",
+        "type": "integer",
+        "default": 2,
+        "minimum": 1,
+        "maximum": 5,
+        "description": "Number of consecutive 'out of zone' readings required before triggering escape alert (prevents GPS drift false alarms)"
+      },
+      "escapeCheckInterval": {
+        "title": "Escape Check Interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 120,
+        "description": "How quickly to re-check when potential escape detected (faster than normal polling)"
       }
     }
   },
@@ -73,6 +89,14 @@
       "items": [
         "pollingInterval",
         "escapeAlertType"
+      ]
+    },
+    {
+      "type": "flex",
+      "flex-flow": "row wrap",
+      "items": [
+        "escapeConfirmations",
+        "escapeCheckInterval"
       ]
     },
     {
