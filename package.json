@@ -18,7 +18,7 @@
   ],
   "engines": {
     "node": ">=18.0.0",
-    "homebridge": ">=1.6.0"
+    "homebridge": "^1.6.0 || ^2.0.0"
   },
   "author": "Dave Linger",
   "license": "Apache-2.0",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "homebridge": "^1.6.0",
+    "homebridge": "^1.6.0 || ^2.0.0",
     "typescript": "^5.0.0"
   }
 }
