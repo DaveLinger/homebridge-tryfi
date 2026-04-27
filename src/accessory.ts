@@ -30,15 +30,24 @@ export class TryFiCollarAccessory {
     // Get or create services
     const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
     
+    // Remove the opposite service type in case the user changed escapeAlertType — cached
+    // accessories retain old services and HomeKit would show both without this cleanup.
     if (escapeAlertType === 'leak') {
       this.escapeAlertService = this.accessory.getService(this.platform.Service.LeakSensor) ||
         this.accessory.addService(this.platform.Service.LeakSensor);
-      this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
+      const staleMotion = this.accessory.getService(this.platform.Service.MotionSensor);
+      if (staleMotion) {
+        this.accessory.removeService(staleMotion);
+      }
     } else {
       this.escapeAlertService = this.accessory.getService(this.platform.Service.MotionSensor) ||
         this.accessory.addService(this.platform.Service.MotionSensor);
-      this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
+      const staleLeak = this.accessory.getService(this.platform.Service.LeakSensor);
+      if (staleLeak) {
+        this.accessory.removeService(staleLeak);
+      }
     }
+    this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
 
     this.batteryService = this.accessory.getService(this.platform.Service.Battery) ||
       this.accessory.addService(this.platform.Service.Battery);
