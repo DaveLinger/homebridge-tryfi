@@ -4,23 +4,21 @@
   "singular": true,
   "schema": {
     "type": "object",
+    "required": ["username", "password"],
     "properties": {
       "name": {
         "title": "Platform Name",
         "type": "string",
-        "default": "TryFi",
-        "required": true
+        "default": "TryFi"
       },
       "username": {
         "title": "TryFi Email",
         "type": "string",
-        "required": true,
         "placeholder": "your@email.com"
       },
       "password": {
         "title": "TryFi Password",
         "type": "string",
-        "required": true,
         "placeholder": "password"
       },
       "pollingInterval": {

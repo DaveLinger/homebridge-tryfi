@@ -1,6 +1,6 @@
 {
   "name": "homebridge-tryfi",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Homebridge plugin for TryFi Dog GPS Collars",
   "main": "dist/index.js",
   "scripts": {
@@ -26,6 +26,7 @@
     "type": "git",
     "url": "https://github.com/DaveLinger/homebridge-tryfi.git"
   },
+  "homepage": "https://github.com/DaveLinger/homebridge-tryfi#readme",
   "bugs": {
     "url": "https://github.com/DaveLinger/homebridge-tryfi/issues"
   },
