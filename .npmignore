@@ -1,0 +1,7 @@
+.claude/
+.DS_Store
+src/
+tsconfig.json
+CHANGES-V3.md
+SUMMARY.md
+*.map
