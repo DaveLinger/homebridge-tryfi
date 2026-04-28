@@ -22,8 +22,8 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   public readonly collarAccessories: Map<string, TryFiCollarAccessory> = new Map();
 
-  public readonly tryfiApi: TryFiAPI;
-  public readonly api: TryFiAPI; // Alias for accessory use
+  public readonly tryfiApi!: TryFiAPI;
+  public readonly api!: TryFiAPI; // Alias for accessory use
   private pollingInterval?: NodeJS.Timeout;
   
   // Escape alert hysteresis tracking (in-memory only, resets on restart)
@@ -41,10 +41,12 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
     // Cast config to our platform config type
     this.config = config as TryFiPlatformConfig;
 
-    // Validate config
+    // Validate config — log and return early rather than throwing, so Homebridge
+    // doesn't enter a crash-restart loop when credentials are missing.
     if (!this.config.username || !this.config.password) {
-      this.log.error('TryFi username and password are required in config');
-      throw new Error('Missing required config');
+      this.log.error('TryFi: "username" and "password" are required in the plugin config.');
+      this.log.error('Please open the Homebridge UI, go to the TryFi plugin settings, and enter your TryFi credentials.');
+      return;
     }
 
     // Create API client
