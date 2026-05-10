@@ -12,7 +12,7 @@ export interface TryFiPlatformConfig extends PlatformConfig {
   escapeConfirmations?: number; // consecutive out-of-zone readings required, default 2
   escapeCheckInterval?: number; // seconds between quick checks, default 30
   offlineAlertMinutes?: number; // minutes offline before alerting, disabled if unset
-  offlineAlertType?: 'leak' | 'motion'; // default 'motion'
+  offlineAlertType?: 'leak' | 'motion' | 'none'; // default 'motion'
 }
 
 /**
