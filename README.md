@@ -22,9 +22,19 @@ This plugin exposes your TryFi dog collars to HomeKit with the following accesso
   - Configurable hysteresis prevents false alarms from GPS noise
 - **Collar Offline Alert** - Notifies you when the collar loses connectivity for longer than a threshold you set — something the official Fi app never does
 
-## What's New in v1.2.0 🎉
+## What's New in v1.3.0
 
-### 🔥 Escape Alert Hysteresis (GPS Drift Protection)
+### Collar Offline Alerts
+
+The Fi app has no push notification for a collar going offline. This release adds an optional HomeKit sensor that trips when the collar hasn't been seen for longer than a configured threshold, so you can wire it to any automation or notification you want. See [Collar Offline Alerts](#collar-offline-alerts-filling-a-gap-in-the-fi-app) below.
+
+### Upgrade Note
+
+**Existing escape alert automations will need to be re-added after upgrading.** HomeKit internally distinguishes services by type + subtype. This release adds a subtype to the escape alert service so it can coexist with the new offline alert service when both use the same sensor type — HomeKit treats this as a new service and drops any automations referencing the old one. This is a one-time change; automations created after upgrading will persist normally.
+
+## What's New in v1.2.0
+
+### Escape Alert Hysteresis (GPS Drift Protection)
 
 Prevents false escape alerts from GPS noise at safe zone boundaries:
 
@@ -36,7 +46,7 @@ Prevents false escape alerts from GPS noise at safe zone boundaries:
 - **Without hysteresis:** False alarm! 🚨
 - **With hysteresis (default):** Waits 30s, re-checks, sees dog is safe, no alert ✅
 
-### 🐕 Ignore Specific Pets
+### Ignore Specific Pets
 
 Exclude specific pets from HomeKit monitoring:
 
@@ -103,7 +113,7 @@ Add this to your Homebridge `config.json`:
       "escapeAlertType": "leak",
       "escapeConfirmations": 2,
       "escapeCheckInterval": 30,
-      "offlineAlertMinutes": 20,
+      "offlineAlertMinutes": 15,
       "offlineAlertType": "motion",
       "ignoredPets": []
     }
@@ -119,12 +129,12 @@ Add this to your Homebridge `config.json`:
 | `name` | Yes | - | - | Platform name (can be anything) |
 | `username` | Yes | - | - | Your TryFi email address |
 | `password` | Yes | - | - | Your TryFi password |
-| `pollingInterval` | No | `60` | 10-300 | Seconds between API polls |
+| `pollingInterval` | No | `60` | 30-300 | Seconds between API polls |
 | `escapeAlertType` | No | `"leak"` | leak/motion | Notification urgency level |
-| `escapeConfirmations` | No | `2` | 1-5 | Consecutive out-of-zone checks required |
+| `escapeConfirmations` | No | `2` | 1-3 | Consecutive out-of-zone checks required |
 | `escapeCheckInterval` | No | `30` | 10-120 | Seconds between quick re-checks |
-| `offlineAlertMinutes` | No | disabled | 1-60 | Minutes offline before triggering alert; omit to disable |
-| `offlineAlertType` | No | `"motion"` | leak/motion | Notification urgency for offline alerts |
+| `offlineAlertMinutes` | No | `15` | 1-60 | Minutes offline before triggering alert |
+| `offlineAlertType` | No | `"motion"` | leak/motion | Sensor type for offline alerts; omit to disable |
 | `ignoredPets` | No | `[]` | - | Array of pet names to exclude |
 
 ### Escape Alert Types
@@ -166,9 +176,9 @@ Each monitored collar appears in HomeKit with:
 - Triggers when dog escapes outside safe zones while alone
 - Smart hysteresis prevents false GPS drift alarms
 
-**Collar Offline** *(optional — enabled by setting `offlineAlertMinutes`)*
+**Collar Offline** *(optional — enabled by setting `offlineAlertType`)*
 - Motion Sensor (default) or Leak Sensor
-- Triggers when the collar hasn't been seen for longer than your threshold
+- Triggers when the collar hasn't been seen for longer than `offlineAlertMinutes`
 - Clears automatically once the collar reconnects
 
 ### Automations
@@ -231,11 +241,17 @@ Or reduce confirmations (less GPS protection):
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-**Latest:** v1.2.0
+**v1.3.0** *(next release)*
+- Collar offline alert — configurable HomeKit sensor when collar loses connectivity
+- Escape and offline alerts independently configurable (leak or motion sensor each)
+- Note: escape alert automations need to be re-added after upgrading (one-time)
+
+**v1.2.4** — Handle missing config gracefully to prevent crash-restart loop
+
+**v1.2.0**
 - Escape alert hysteresis (GPS drift protection)
 - Accurate charging detection using battery current
 - Ignore specific pets feature
-- Smart notification handling
 
 ## Credits
 
