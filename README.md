@@ -121,7 +121,7 @@ Add this to your Homebridge `config.json`:
 | `escapeAlertType` | No | `"leak"` | leak/motion | Notification urgency level |
 | `escapeConfirmations` | No | `2` | 1-5 | Consecutive out-of-zone checks required |
 | `escapeCheckInterval` | No | `30` | 10-120 | Seconds between quick re-checks |
-| `offlineAlertMinutes` | No | disabled | 1-1440 | Minutes offline before triggering alert; omit to disable |
+| `offlineAlertMinutes` | No | disabled | 1-60 | Minutes offline before triggering alert; omit to disable |
 | `offlineAlertType` | No | `"motion"` | leak/motion | Notification urgency for offline alerts |
 | `ignoredPets` | No | `[]` | - | Array of pet names to exclude |
 
