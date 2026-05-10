@@ -59,7 +59,7 @@
         "type": "integer",
         "default": 2,
         "enum": [1, 2, 3],
-        "description": "Consecutive 'out of zone' readings required before escape alert (1 = immediate, 2 = balanced, 3 = conservative)"
+        "description": "1 = immediate, 2 = balanced, 3 = conservative"
       },
       "escapeCheckInterval": {
         "title": "Escape Check Interval (seconds)",
@@ -67,7 +67,7 @@
         "default": 30,
         "minimum": 10,
         "maximum": 120,
-        "description": "How quickly to re-check when potential escape detected (faster than normal polling)"
+        "description": "Seconds between re-checks when a potential escape is detected"
       },
       "offlineAlertMinutes": {
         "title": "Collar Offline Alert (minutes)",
@@ -75,7 +75,7 @@
         "default": 15,
         "minimum": 1,
         "maximum": 60,
-        "description": "How long the collar must be offline before alerting. Leave alert type blank to disable."
+        "description": "Minutes offline before alerting (1-60)"
       },
       "offlineAlertType": {
         "title": "Collar Offline Alert Type",
@@ -91,7 +91,7 @@
             "enum": ["leak"]
           }
         ],
-        "description": "How collar offline alerts appear in HomeKit. Leave blank to disable."
+        "description": "Leave blank to disable offline alerts"
       }
     }
   },
