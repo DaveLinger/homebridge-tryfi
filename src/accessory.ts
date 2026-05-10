@@ -31,7 +31,7 @@ export class TryFiCollarAccessory {
     // Get or create services
     const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
     const offlineAlertType = this.platform.config.offlineAlertType || 'motion';
-    const offlineAlertMinutes = this.platform.config.offlineAlertMinutes;
+    const offlineAlertMinutes = offlineAlertType === 'none' ? undefined : this.platform.config.offlineAlertMinutes;
 
     // Escape alert service — uses 'escape' subtype so it can coexist with the offline
     // alert service even when both are configured to the same sensor type (HAP requires

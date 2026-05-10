@@ -76,7 +76,7 @@
         "default": 15,
         "minimum": 1,
         "maximum": 60,
-        "description": "Alert when collar has been offline for this many minutes. Leave blank to disable."
+        "description": "How long the collar must be offline before alerting. Set alert type to 'None' to disable."
       },
       "offlineAlertType": {
         "title": "Collar Offline Alert Type",
@@ -90,9 +90,13 @@
           {
             "title": "Leak Sensor (Critical Alert)",
             "enum": ["leak"]
+          },
+          {
+            "title": "None (Disabled)",
+            "enum": ["none"]
           }
         ],
-        "description": "How collar offline alerts appear in HomeKit"
+        "description": "How collar offline alerts appear in HomeKit. Set to 'None' to disable."
       }
     }
   },
@@ -102,7 +106,7 @@
       "flex-flow": "row wrap",
       "items": [
         "username",
-        "password"
+        { "key": "password", "type": "password" }
       ]
     },
     {
