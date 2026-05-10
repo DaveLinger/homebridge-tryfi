@@ -69,6 +69,29 @@
         "minimum": 10,
         "maximum": 120,
         "description": "How quickly to re-check when potential escape detected (faster than normal polling)"
+      },
+      "offlineAlertMinutes": {
+        "title": "Collar Offline Alert (minutes)",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1440,
+        "description": "Alert when collar has been offline for this many minutes. Leave blank to disable."
+      },
+      "offlineAlertType": {
+        "title": "Collar Offline Alert Type",
+        "type": "string",
+        "default": "motion",
+        "oneOf": [
+          {
+            "title": "Motion Sensor (Standard Alert)",
+            "enum": ["motion"]
+          },
+          {
+            "title": "Leak Sensor (Critical Alert)",
+            "enum": ["leak"]
+          }
+        ],
+        "description": "How collar offline alerts appear in HomeKit"
       }
     }
   },
@@ -95,6 +118,14 @@
       "items": [
         "escapeConfirmations",
         "escapeCheckInterval"
+      ]
+    },
+    {
+      "type": "flex",
+      "flex-flow": "row wrap",
+      "items": [
+        "offlineAlertMinutes",
+        "offlineAlertType"
       ]
     },
     {
