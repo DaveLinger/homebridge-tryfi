@@ -33,35 +33,28 @@ export class TryFiCollarAccessory {
     const offlineAlertType = this.platform.config.offlineAlertType || 'motion';
     const offlineAlertMinutes = this.platform.config.offlineAlertMinutes;
 
-    // Escape alert service — intentionally uses NO subtype to preserve automations on upgrade.
-    // The offline alert uses the 'offline' subtype, so we use accessory.services.find()
-    // (filtering on !s.subtype) to safely distinguish the two when they share a sensor type.
-    // Also cleans up any 'escape'-subtyped services left from a pre-release branch build.
-    const noSubtype = (uuid: string) =>
-      this.accessory.services.find(s => s.UUID === uuid && !s.subtype);
-
+    // Escape alert service — uses 'escape' subtype so it can coexist with the offline
+    // alert service even when both are configured to the same sensor type (HAP requires
+    // unique subtypes when an accessory has multiple services with the same UUID).
+    // Note: this is a one-time breaking change for users upgrading from v1.2.x — any
+    // automations using the escape alert will need to be re-added after upgrading.
+    // Migration: remove any legacy no-subtype service from v1.2.x.
     if (escapeAlertType === 'leak') {
       this.escapeAlertService =
-        noSubtype(this.platform.Service.LeakSensor.UUID) ||
-        this.accessory.addService(this.platform.Service.LeakSensor);
-      const staleMotion = noSubtype(this.platform.Service.MotionSensor.UUID);
-      if (staleMotion) this.accessory.removeService(staleMotion);
-      // pre-release branch cleanup
-      const branchEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
-      if (branchEscapeMotion) this.accessory.removeService(branchEscapeMotion);
-      const branchEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
-      if (branchEscapeLeak) this.accessory.removeService(branchEscapeLeak);
+        this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape') ||
+        this.accessory.addService(this.platform.Service.LeakSensor, `${pet.name} Escape Alert`, 'escape');
+      const legacyEscape = this.accessory.services.find(s => s.UUID === this.platform.Service.LeakSensor.UUID && !s.subtype);
+      if (legacyEscape) this.accessory.removeService(legacyEscape);
+      const staleEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
+      if (staleEscapeMotion) this.accessory.removeService(staleEscapeMotion);
     } else {
       this.escapeAlertService =
-        noSubtype(this.platform.Service.MotionSensor.UUID) ||
-        this.accessory.addService(this.platform.Service.MotionSensor);
-      const staleLeak = noSubtype(this.platform.Service.LeakSensor.UUID);
-      if (staleLeak) this.accessory.removeService(staleLeak);
-      // pre-release branch cleanup
-      const branchEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
-      if (branchEscapeLeak) this.accessory.removeService(branchEscapeLeak);
-      const branchEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
-      if (branchEscapeMotion) this.accessory.removeService(branchEscapeMotion);
+        this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape') ||
+        this.accessory.addService(this.platform.Service.MotionSensor, `${pet.name} Escape Alert`, 'escape');
+      const legacyEscape = this.accessory.services.find(s => s.UUID === this.platform.Service.MotionSensor.UUID && !s.subtype);
+      if (legacyEscape) this.accessory.removeService(legacyEscape);
+      const staleEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
+      if (staleEscapeLeak) this.accessory.removeService(staleEscapeLeak);
     }
     this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
     this.escapeAlertService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${pet.name} Escape Alert`);
