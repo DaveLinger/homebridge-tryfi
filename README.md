@@ -44,7 +44,7 @@ Prevents false escape alerts from GPS noise at safe zone boundaries:
 - **Without hysteresis:** False alarm! 🚨
 - **With hysteresis (default):** Waits 30s, re-checks, sees dog is safe, no alert ✅
 
-### Ignore Specific Pets
+### 🐕 Ignore Specific Pets
 
 Exclude specific pets from HomeKit monitoring:
 
