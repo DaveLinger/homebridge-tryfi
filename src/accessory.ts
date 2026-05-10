@@ -62,6 +62,7 @@ export class TryFiCollarAccessory {
       }
     }
     this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
+    this.escapeAlertService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${pet.name} Escape Alert`);
 
     // Offline alert service — optional, uses 'offline' subtype
     if (offlineAlertMinutes) {
@@ -83,6 +84,7 @@ export class TryFiCollarAccessory {
         }
       }
       this.offlineAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Collar Offline`);
+      this.offlineAlertService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${pet.name} Collar Offline`);
     } else {
       // offlineAlertMinutes not set — remove any lingering offline services from a previous config
       const staleOfflineLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'offline');
