@@ -59,7 +59,7 @@
         "type": "integer",
         "default": 2,
         "enum": [1, 2, 3],
-        "description": "Consecutive 'out of zone' readings required before triggering escape alert"
+        "description": "Consecutive 'out of zone' readings required before escape alert (1 = immediate, 2 = balanced, 3 = conservative)"
       },
       "escapeCheckInterval": {
         "title": "Escape Check Interval (seconds)",
@@ -108,22 +108,15 @@
       "type": "flex",
       "flex-flow": "row wrap",
       "items": [
-        "pollingInterval",
-        "escapeAlertType"
+        "escapeAlertType",
+        "pollingInterval"
       ]
     },
     {
       "type": "flex",
       "flex-flow": "row wrap",
       "items": [
-        {
-          "key": "escapeConfirmations",
-          "titleMap": [
-            { "value": 1, "name": "1 — Immediate" },
-            { "value": 2, "name": "2 — Balanced (default)" },
-            { "value": 3, "name": "3 — Conservative" }
-          ]
-        },
+        "escapeConfirmations",
         "escapeCheckInterval"
       ]
     },
@@ -131,8 +124,8 @@
       "type": "flex",
       "flex-flow": "row wrap",
       "items": [
-        "offlineAlertMinutes",
-        "offlineAlertType"
+        "offlineAlertType",
+        "offlineAlertMinutes"
       ]
     },
     {
