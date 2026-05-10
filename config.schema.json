@@ -35,11 +35,11 @@
         "default": "leak",
         "oneOf": [
           {
-            "title": "Leak Sensor (Critical Alert)",
+            "title": "Leak Sensor (Critical)",
             "enum": ["leak"]
           },
           {
-            "title": "Motion Sensor (Standard Alert)",
+            "title": "Motion Sensor (Standard)",
             "enum": ["motion"]
           }
         ],
@@ -58,9 +58,21 @@
         "title": "Escape Confirmations",
         "type": "integer",
         "default": 2,
-        "minimum": 1,
-        "maximum": 5,
-        "description": "Number of consecutive 'out of zone' readings required before triggering escape alert (prevents GPS drift false alarms)"
+        "oneOf": [
+          {
+            "title": "1 — Immediate",
+            "enum": [1]
+          },
+          {
+            "title": "2 — Balanced (default)",
+            "enum": [2]
+          },
+          {
+            "title": "3 — Conservative",
+            "enum": [3]
+          }
+        ],
+        "description": "Consecutive 'out of zone' readings required before triggering escape alert"
       },
       "escapeCheckInterval": {
         "title": "Escape Check Interval (seconds)",
@@ -76,7 +88,7 @@
         "default": 15,
         "minimum": 1,
         "maximum": 60,
-        "description": "How long the collar must be offline before alerting. Set alert type to 'None' to disable."
+        "description": "How long the collar must be offline before alerting. Set alert type to 'Disabled' to turn off."
       },
       "offlineAlertType": {
         "title": "Collar Offline Alert Type",
@@ -84,19 +96,19 @@
         "default": "motion",
         "oneOf": [
           {
-            "title": "Motion Sensor (Standard Alert)",
+            "title": "Motion Sensor (Standard)",
             "enum": ["motion"]
           },
           {
-            "title": "Leak Sensor (Critical Alert)",
+            "title": "Leak Sensor (Critical)",
             "enum": ["leak"]
           },
           {
-            "title": "None (Disabled)",
+            "title": "Disabled",
             "enum": ["none"]
           }
         ],
-        "description": "How collar offline alerts appear in HomeKit. Set to 'None' to disable."
+        "description": "How collar offline alerts appear in HomeKit. Select 'Disabled' to turn off."
       }
     }
   },
