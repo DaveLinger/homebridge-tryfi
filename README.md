@@ -18,6 +18,7 @@ This plugin exposes your TryFi dog collars to HomeKit with the following accesso
   - Outside ALL safe zones, AND
   - Not connected to any owner via Bluetooth
   - Configurable hysteresis prevents false alarms from GPS noise
+- **Collar Offline Alert** - Notifies you when the collar loses connectivity for longer than a threshold you set — something the official Fi app never does
 
 ## What's New in v1.2.0 🎉
 
@@ -42,6 +43,33 @@ Exclude specific pets from HomeKit monitoring:
 ```
 
 Only creates accessories for pets you want to monitor.
+
+## Collar Offline Alerts: Filling a Gap in the Fi App
+
+The official Fi app can tell you a collar has been offline — but only if you open the app and happen to notice. **There is no push notification in the Fi app for a collar going offline.** If your dog's collar loses connectivity while she's in the yard, you have no way of knowing until you check manually.
+
+This plugin closes that gap. When the collar hasn't been seen for longer than your configured threshold, a HomeKit sensor trips — and you can wire that to any notification or automation you want.
+
+```
+When Lulu Collar Offline detects motion
+  → Send notification "⚠️ Lulu's collar has been offline for 20 minutes"
+```
+
+This is particularly useful for catching a dead battery before it becomes a problem, or knowing quickly if the collar fell off.
+
+### Collar Offline Alert Types
+
+**Motion Sensor** (default for offline alerts):
+- Triggers standard HomeKit notifications
+- Shows "Motion Detected" when collar goes offline
+- A good default — offline isn't usually an emergency
+
+**Leak Sensor**:
+- Triggers critical HomeKit notifications
+- Shows "Leak Detected" when collar goes offline
+- Best for: households where a missed offline event could be serious
+
+The offline and escape alerts are configured independently, so you can use a Leak Sensor for escapes (critical) and a Motion Sensor for offline events (lower urgency), or any other combination.
 
 ## Installation
 
@@ -73,6 +101,8 @@ Add this to your Homebridge `config.json`:
       "escapeAlertType": "leak",
       "escapeConfirmations": 2,
       "escapeCheckInterval": 30,
+      "offlineAlertMinutes": 20,
+      "offlineAlertType": "motion",
       "ignoredPets": []
     }
   ]
@@ -91,6 +121,8 @@ Add this to your Homebridge `config.json`:
 | `escapeAlertType` | No | `"leak"` | leak/motion | Notification urgency level |
 | `escapeConfirmations` | No | `2` | 1-5 | Consecutive out-of-zone checks required |
 | `escapeCheckInterval` | No | `30` | 10-120 | Seconds between quick re-checks |
+| `offlineAlertMinutes` | No | disabled | 1-1440 | Minutes offline before triggering alert; omit to disable |
+| `offlineAlertType` | No | `"motion"` | leak/motion | Notification urgency for offline alerts |
 | `ignoredPets` | No | `[]` | - | Array of pet names to exclude |
 
 ### Escape Alert Types
@@ -132,6 +164,11 @@ Each monitored collar appears in HomeKit with:
 - Triggers when dog escapes outside safe zones while alone
 - Smart hysteresis prevents false GPS drift alarms
 
+**Collar Offline** *(optional — enabled by setting `offlineAlertMinutes`)*
+- Motion Sensor (default) or Leak Sensor
+- Triggers when the collar hasn't been seen for longer than your threshold
+- Clears automatically once the collar reconnects
+
 ### Automations
 
 Example automations you can create:
@@ -160,6 +197,18 @@ When [Dog Name] Escape Alert stops detecting leak
 ```
 When I say "Find [Dog]"
   → Turn on [Dog Name] LED Light
+```
+
+**Collar Offline Warning:**
+```
+When [Dog Name] Collar Offline detects motion
+  → Send notification "⚠️ [Dog]'s collar has been offline for a while"
+```
+
+**Collar Offline + Auto Lost Mode** *(escalation)*:
+```
+When [Dog Name] Collar Offline detects motion
+  → Turn on [Dog Name] Lost Dog Mode (high-frequency GPS once it reconnects)
 ```
 
 ## Troubleshooting
