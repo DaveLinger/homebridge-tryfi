@@ -58,20 +58,7 @@
         "title": "Escape Confirmations",
         "type": "integer",
         "default": 2,
-        "oneOf": [
-          {
-            "title": "1 — Immediate",
-            "enum": [1]
-          },
-          {
-            "title": "2 — Balanced (default)",
-            "enum": [2]
-          },
-          {
-            "title": "3 — Conservative",
-            "enum": [3]
-          }
-        ],
+        "enum": [1, 2, 3],
         "description": "Consecutive 'out of zone' readings required before triggering escape alert"
       },
       "escapeCheckInterval": {
@@ -133,7 +120,14 @@
       "type": "flex",
       "flex-flow": "row wrap",
       "items": [
-        "escapeConfirmations",
+        {
+          "key": "escapeConfirmations",
+          "titleMap": [
+            { "value": 1, "name": "1 — Immediate" },
+            { "value": 2, "name": "2 — Balanced (default)" },
+            { "value": 3, "name": "3 — Conservative" }
+          ]
+        },
         "escapeCheckInterval"
       ]
     },
