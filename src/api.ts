@@ -192,10 +192,13 @@ export class TryFiAPI {
 
             // Determine connection status
             const connectionState = pet.device.lastConnectionState;
-            const connectedToUser = 
+            const connectedToUser =
               connectionState?.__typename === 'ConnectedToUser'
                 ? (connectionState as any).user?.firstName || null
                 : null;
+            const ONLINE_TYPES = ['ConnectedToUser', 'ConnectedToBase', 'ConnectedToCellular'];
+            const isOnline = ONLINE_TYPES.includes(connectionState?.__typename || '');
+            const lastSeenDate = connectionState?.date ? new Date(connectionState.date) : null;
 
             pets.push({
               petId: pet.id,
@@ -207,6 +210,8 @@ export class TryFiAPI {
               ledEnabled: pet.device.operationParams?.ledEnabled || false,
               mode: pet.device.operationParams?.mode || 'NORMAL',
               connectedToUser,
+              isOnline,
+              lastSeenDate,
               ...location,
             });
           }

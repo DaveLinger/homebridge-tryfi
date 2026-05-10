@@ -11,6 +11,8 @@ export interface TryFiPlatformConfig extends PlatformConfig {
   ignoredPets?: string[]; // pet names to ignore (case-insensitive)
   escapeConfirmations?: number; // consecutive out-of-zone readings required, default 2
   escapeCheckInterval?: number; // seconds between quick checks, default 30
+  offlineAlertMinutes?: number; // minutes offline before alerting, disabled if unset
+  offlineAlertType?: 'leak' | 'motion'; // default 'motion'
 }
 
 /**
@@ -34,6 +36,8 @@ export interface TryFiPet {
   ledEnabled: boolean;
   mode: string; // 'NORMAL' or 'LOST_DOG'
   connectedToUser: string | null; // firstName of user, null if not connected
+  isOnline: boolean; // false when collar is not connected to phone, base, or cellular
+  lastSeenDate: Date | null; // when the collar was last in any connected state
   latitude: number;
   longitude: number;
   areaName: string | null;

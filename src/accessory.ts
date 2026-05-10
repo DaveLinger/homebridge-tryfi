@@ -11,9 +11,10 @@ export class TryFiCollarAccessory {
   private batteryService: Service;
   private lightbulbService: Service;
   private lostDogSwitchService: Service;
-  
-  // Track last escape state to avoid redundant HomeKit updates
+  private offlineAlertService?: Service;
+
   private lastEscapeState?: boolean;
+  private lastOfflineAlertState?: boolean;
 
   constructor(
     private readonly platform: TryFiPlatform,
@@ -29,25 +30,70 @@ export class TryFiCollarAccessory {
 
     // Get or create services
     const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
-    
-    // Remove the opposite service type in case the user changed escapeAlertType — cached
-    // accessories retain old services and HomeKit would show both without this cleanup.
+    const offlineAlertType = this.platform.config.offlineAlertType || 'motion';
+    const offlineAlertMinutes = this.platform.config.offlineAlertMinutes;
+
+    // Escape alert service — uses 'escape' subtype so it can coexist with the offline
+    // alert service even when both are configured to the same sensor type.
+    // Migration: remove any legacy no-subtype service left from older plugin versions.
     if (escapeAlertType === 'leak') {
-      this.escapeAlertService = this.accessory.getService(this.platform.Service.LeakSensor) ||
-        this.accessory.addService(this.platform.Service.LeakSensor);
-      const staleMotion = this.accessory.getService(this.platform.Service.MotionSensor);
-      if (staleMotion) {
-        this.accessory.removeService(staleMotion);
+      this.escapeAlertService =
+        this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape') ||
+        this.accessory.addService(this.platform.Service.LeakSensor, `${pet.name} Escape Alert`, 'escape');
+      const legacyLeak = this.accessory.getService(this.platform.Service.LeakSensor);
+      if (legacyLeak && legacyLeak !== this.escapeAlertService) {
+        this.accessory.removeService(legacyLeak);
+      }
+      const staleEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
+      if (staleEscapeMotion) {
+        this.accessory.removeService(staleEscapeMotion);
       }
     } else {
-      this.escapeAlertService = this.accessory.getService(this.platform.Service.MotionSensor) ||
-        this.accessory.addService(this.platform.Service.MotionSensor);
-      const staleLeak = this.accessory.getService(this.platform.Service.LeakSensor);
-      if (staleLeak) {
-        this.accessory.removeService(staleLeak);
+      this.escapeAlertService =
+        this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape') ||
+        this.accessory.addService(this.platform.Service.MotionSensor, `${pet.name} Escape Alert`, 'escape');
+      const legacyMotion = this.accessory.getService(this.platform.Service.MotionSensor);
+      if (legacyMotion && legacyMotion !== this.escapeAlertService) {
+        this.accessory.removeService(legacyMotion);
+      }
+      const staleEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
+      if (staleEscapeLeak) {
+        this.accessory.removeService(staleEscapeLeak);
       }
     }
     this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
+
+    // Offline alert service — optional, uses 'offline' subtype
+    if (offlineAlertMinutes) {
+      if (offlineAlertType === 'leak') {
+        this.offlineAlertService =
+          this.accessory.getServiceById(this.platform.Service.LeakSensor, 'offline') ||
+          this.accessory.addService(this.platform.Service.LeakSensor, `${pet.name} Collar Offline`, 'offline');
+        const staleOfflineMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'offline');
+        if (staleOfflineMotion) {
+          this.accessory.removeService(staleOfflineMotion);
+        }
+      } else {
+        this.offlineAlertService =
+          this.accessory.getServiceById(this.platform.Service.MotionSensor, 'offline') ||
+          this.accessory.addService(this.platform.Service.MotionSensor, `${pet.name} Collar Offline`, 'offline');
+        const staleOfflineLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'offline');
+        if (staleOfflineLeak) {
+          this.accessory.removeService(staleOfflineLeak);
+        }
+      }
+      this.offlineAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Collar Offline`);
+    } else {
+      // offlineAlertMinutes not set — remove any lingering offline services from a previous config
+      const staleOfflineLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'offline');
+      if (staleOfflineLeak) {
+        this.accessory.removeService(staleOfflineLeak);
+      }
+      const staleOfflineMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'offline');
+      if (staleOfflineMotion) {
+        this.accessory.removeService(staleOfflineMotion);
+      }
+    }
 
     this.batteryService = this.accessory.getService(this.platform.Service.Battery) ||
       this.accessory.addService(this.platform.Service.Battery);
@@ -105,14 +151,52 @@ export class TryFiCollarAccessory {
         );
       }
       
+      const wasEscaped = this.lastEscapeState;
       this.lastEscapeState = isEscaped;
-      
-      // Log state changes
+
       if (isEscaped) {
         this.platform.log.warn(`🚨 ${this.pet.name} has ESCAPED!`);
-      } else if (this.lastEscapeState === true) {
-        // Only log "back safe" if was previously escaped
+      } else if (wasEscaped) {
         this.platform.log.info(`✅ ${this.pet.name} is back in safe zone`);
+      }
+    }
+
+    // Offline Alert
+    if (this.offlineAlertService && this.platform.config.offlineAlertMinutes) {
+      const offlineAlertType = this.platform.config.offlineAlertType || 'motion';
+      let isOfflineAlert = false;
+
+      if (!this.pet.isOnline && this.pet.lastSeenDate) {
+        const minutesOffline = (Date.now() - this.pet.lastSeenDate.getTime()) / 60000;
+        isOfflineAlert = minutesOffline >= this.platform.config.offlineAlertMinutes;
+      }
+
+      if (this.lastOfflineAlertState !== isOfflineAlert) {
+        if (offlineAlertType === 'leak') {
+          this.offlineAlertService.updateCharacteristic(
+            this.platform.Characteristic.LeakDetected,
+            isOfflineAlert
+              ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
+              : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
+          );
+        } else {
+          this.offlineAlertService.updateCharacteristic(
+            this.platform.Characteristic.MotionDetected,
+            isOfflineAlert,
+          );
+        }
+
+        const wasOfflineAlert = this.lastOfflineAlertState;
+        this.lastOfflineAlertState = isOfflineAlert;
+
+        if (isOfflineAlert) {
+          const minutes = this.pet.lastSeenDate
+            ? Math.round((Date.now() - this.pet.lastSeenDate.getTime()) / 60000)
+            : this.platform.config.offlineAlertMinutes;
+          this.platform.log.warn(`${this.pet.name} collar has been offline for ${minutes} minute(s)`);
+        } else if (wasOfflineAlert) {
+          this.platform.log.info(`${this.pet.name} collar is back online`);
+        }
       }
     }
 
