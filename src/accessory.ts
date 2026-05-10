@@ -33,33 +33,35 @@ export class TryFiCollarAccessory {
     const offlineAlertType = this.platform.config.offlineAlertType || 'motion';
     const offlineAlertMinutes = this.platform.config.offlineAlertMinutes;
 
-    // Escape alert service — uses 'escape' subtype so it can coexist with the offline
-    // alert service even when both are configured to the same sensor type.
-    // Migration: remove any legacy no-subtype service left from older plugin versions.
+    // Escape alert service — intentionally uses NO subtype to preserve automations on upgrade.
+    // The offline alert uses the 'offline' subtype, so we use accessory.services.find()
+    // (filtering on !s.subtype) to safely distinguish the two when they share a sensor type.
+    // Also cleans up any 'escape'-subtyped services left from a pre-release branch build.
+    const noSubtype = (uuid: string) =>
+      this.accessory.services.find(s => s.UUID === uuid && !s.subtype);
+
     if (escapeAlertType === 'leak') {
       this.escapeAlertService =
-        this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape') ||
-        this.accessory.addService(this.platform.Service.LeakSensor, `${pet.name} Escape Alert`, 'escape');
-      const legacyLeak = this.accessory.getService(this.platform.Service.LeakSensor);
-      if (legacyLeak && legacyLeak !== this.escapeAlertService) {
-        this.accessory.removeService(legacyLeak);
-      }
-      const staleEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
-      if (staleEscapeMotion) {
-        this.accessory.removeService(staleEscapeMotion);
-      }
+        noSubtype(this.platform.Service.LeakSensor.UUID) ||
+        this.accessory.addService(this.platform.Service.LeakSensor);
+      const staleMotion = noSubtype(this.platform.Service.MotionSensor.UUID);
+      if (staleMotion) this.accessory.removeService(staleMotion);
+      // pre-release branch cleanup
+      const branchEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
+      if (branchEscapeMotion) this.accessory.removeService(branchEscapeMotion);
+      const branchEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
+      if (branchEscapeLeak) this.accessory.removeService(branchEscapeLeak);
     } else {
       this.escapeAlertService =
-        this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape') ||
-        this.accessory.addService(this.platform.Service.MotionSensor, `${pet.name} Escape Alert`, 'escape');
-      const legacyMotion = this.accessory.getService(this.platform.Service.MotionSensor);
-      if (legacyMotion && legacyMotion !== this.escapeAlertService) {
-        this.accessory.removeService(legacyMotion);
-      }
-      const staleEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
-      if (staleEscapeLeak) {
-        this.accessory.removeService(staleEscapeLeak);
-      }
+        noSubtype(this.platform.Service.MotionSensor.UUID) ||
+        this.accessory.addService(this.platform.Service.MotionSensor);
+      const staleLeak = noSubtype(this.platform.Service.LeakSensor.UUID);
+      if (staleLeak) this.accessory.removeService(staleLeak);
+      // pre-release branch cleanup
+      const branchEscapeLeak = this.accessory.getServiceById(this.platform.Service.LeakSensor, 'escape');
+      if (branchEscapeLeak) this.accessory.removeService(branchEscapeLeak);
+      const branchEscapeMotion = this.accessory.getServiceById(this.platform.Service.MotionSensor, 'escape');
+      if (branchEscapeMotion) this.accessory.removeService(branchEscapeMotion);
     }
     this.escapeAlertService.setCharacteristic(this.platform.Characteristic.Name, `${pet.name} Escape Alert`);
     this.escapeAlertService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${pet.name} Escape Alert`);
