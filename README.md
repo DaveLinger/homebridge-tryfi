@@ -1,11 +1,8 @@
 # homebridge-tryfi
 
-Homebridge plugin for TryFi Dog GPS Collars
+Homebridge plugin for Fi Pet GPS Collars
 
-[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
-
-[![npm version](https://badge.fury.io/js/homebridge-tryfi.svg)](https://badge.fury.io/js/homebridge-tryfi)
-[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
+[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins) [![npm version](https://badge.fury.io/js/homebridge-tryfi.svg)](https://badge.fury.io/js/homebridge-tryfi)
 
 ## Features
 
