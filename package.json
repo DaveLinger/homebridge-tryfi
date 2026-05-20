@@ -25,7 +25,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DaveLinger/homebridge-tryfi.git"
+    "url": "git+https://github.com/DaveLinger/homebridge-tryfi.git"
   },
   "homepage": "https://github.com/DaveLinger/homebridge-tryfi#readme",
   "bugs": {
