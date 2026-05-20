@@ -5,6 +5,7 @@ Homebridge plugin for TryFi Dog GPS Collars
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 
 [![npm version](https://badge.fury.io/js/homebridge-tryfi.svg)](https://badge.fury.io/js/homebridge-tryfi)
+[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 
 ## Features
 
@@ -241,7 +242,7 @@ Or reduce confirmations (less GPS protection):
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-**v1.3.0** *(next release)*
+**v1.3.0**
 - Collar offline alert — configurable HomeKit sensor when collar loses connectivity
 - Escape and offline alerts independently configurable (leak or motion sensor each)
 - Note: escape alert automations need to be re-added after upgrading (one-time)
