@@ -92,6 +92,14 @@
           }
         ],
         "description": "Leave blank to disable offline alerts"
+      },
+      "apiUnreachableAlertMinutes": {
+        "title": "API Unreachable Alert (minutes)",
+        "type": "integer",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 60,
+        "description": "Minutes the TryFi API must be unreachable before flagging a fault (StatusFault) on each pet's Escape Alert sensor"
       }
     }
   },
@@ -126,6 +134,13 @@
       "items": [
         "offlineAlertType",
         "offlineAlertMinutes"
+      ]
+    },
+    {
+      "type": "flex",
+      "flex-flow": "row wrap",
+      "items": [
+        "apiUnreachableAlertMinutes"
       ]
     },
     {

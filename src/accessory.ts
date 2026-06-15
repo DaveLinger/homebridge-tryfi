@@ -130,33 +130,43 @@ export class TryFiCollarAccessory {
    */
   updateCharacteristics() {
     const escapeAlertType = this.platform.config.escapeAlertType || 'leak';
-    
-    // Escape Alert: Triggered when NOT in safe zone AND NOT with owner
-    const isEscaped = (this.pet.placeName === null) && (this.pet.connectedToUser === null);
-    
-    // Only update HomeKit if escape state changed (prevents redundant notifications)
-    if (this.lastEscapeState !== isEscaped) {
-      if (escapeAlertType === 'leak') {
-        this.escapeAlertService.updateCharacteristic(
-          this.platform.Characteristic.LeakDetected,
-          isEscaped 
-            ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
-            : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
-        );
-      } else {
-        this.escapeAlertService.updateCharacteristic(
-          this.platform.Characteristic.MotionDetected,
-          isEscaped,
-        );
-      }
-      
-      const wasEscaped = this.lastEscapeState;
-      this.lastEscapeState = isEscaped;
 
-      if (isEscaped) {
-        this.platform.log.warn(`🚨 ${this.pet.name} has ESCAPED!`);
-      } else if (wasEscaped) {
-        this.platform.log.info(`✅ ${this.pet.name} is back in safe zone`);
+    // Escape Alert: Triggered when NOT in safe zone AND NOT with owner.
+    // Skip this check entirely if location is unknown (e.g. a transient
+    // network error with nothing cached yet) - placeName: null in that case
+    // is a missing-data placeholder, not a real "out of zone" reading, and
+    // there's no hysteresis here to absorb a one-off false positive.
+    let isEscaped = this.lastEscapeState ?? false;
+
+    if (this.pet.locationUnknown) {
+      this.platform.log.debug(`${this.pet.name}: location unknown this poll, skipping escape check`);
+    } else {
+      isEscaped = (this.pet.placeName === null) && (this.pet.connectedToUser === null);
+
+      // Only update HomeKit if escape state changed (prevents redundant notifications)
+      if (this.lastEscapeState !== isEscaped) {
+        if (escapeAlertType === 'leak') {
+          this.escapeAlertService.updateCharacteristic(
+            this.platform.Characteristic.LeakDetected,
+            isEscaped
+              ? this.platform.Characteristic.LeakDetected.LEAK_DETECTED
+              : this.platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED,
+          );
+        } else {
+          this.escapeAlertService.updateCharacteristic(
+            this.platform.Characteristic.MotionDetected,
+            isEscaped,
+          );
+        }
+
+        const wasEscaped = this.lastEscapeState;
+        this.lastEscapeState = isEscaped;
+
+        if (isEscaped) {
+          this.platform.log.warn(`🚨 ${this.pet.name} has ESCAPED!`);
+        } else if (wasEscaped) {
+          this.platform.log.info(`✅ ${this.pet.name} is back in safe zone`);
+        }
       }
     }
 
@@ -234,6 +244,20 @@ export class TryFiCollarAccessory {
     this.platform.log.debug(`Updated ${this.pet.name}: Battery ${this.pet.batteryPercent}%, ` +
       `LED ${this.pet.ledEnabled ? 'On' : 'Off'}, Mode ${this.pet.mode}, ` +
       `Escaped: ${isEscaped}, Place: ${this.pet.placeName}, With: ${this.pet.connectedToUser}`);
+  }
+
+  /**
+   * Flag the escape alert sensor's StatusFault characteristic to indicate the
+   * TryFi API has been unreachable, so its escape/safe state may be stale.
+   * Surfaced here (rather than a new accessory) so users can automate on it.
+   */
+  setConnectivityFault(faulted: boolean) {
+    this.escapeAlertService.updateCharacteristic(
+      this.platform.Characteristic.StatusFault,
+      faulted
+        ? this.platform.Characteristic.StatusFault.GENERAL_FAULT
+        : this.platform.Characteristic.StatusFault.NO_FAULT,
+    );
   }
 
   /**

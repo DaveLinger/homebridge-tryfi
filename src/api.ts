@@ -9,6 +9,48 @@ import {
   CurrentUserResponse,
 } from './types';
 
+// Network error codes that indicate a temporary outage (DNS hiccup, dropped
+// connection, etc.) rather than a real problem with the request itself.
+const TRANSIENT_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'ECONNABORTED',
+]);
+
+/**
+ * True if the error represents a transient outage (DNS failure, dropped
+ * connection, or a 502/503/504 from TryFi's load balancer) that's expected
+ * to resolve on its own and shouldn't be logged as a hard error.
+ */
+export function isTransientError(error: any): boolean {
+  if (error?.code && TRANSIENT_ERROR_CODES.has(error.code)) {
+    return true;
+  }
+  const status = error?.response?.status;
+  return status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Produce a short, human-readable description of an error for logging,
+ * avoiding the huge circular AxiosError dump that results from logging
+ * the error object directly.
+ */
+export function describeError(error: any): string {
+  if (error?.code === 'EAI_AGAIN' || error?.code === 'ENOTFOUND') {
+    return `DNS lookup failed (${error.code}: ${error.hostname || 'api.tryfi.com'})`;
+  }
+  if (error?.response?.status) {
+    return `HTTP ${error.response.status}${error.response.statusText ? ` ${error.response.statusText}` : ''}`;
+  }
+  if (error?.code) {
+    return `${error.code}: ${error.message}`;
+  }
+  return error?.message || String(error);
+}
+
 /**
  * TryFi API Client - matches pytryfi implementation exactly
  */
@@ -220,8 +262,12 @@ export class TryFiAPI {
 
       this.log.debug(`Retrieved ${pets.length} pet(s) from TryFi`);
       return pets;
-    } catch (error) {
-      this.log.error('Failed to get pets:', error);
+    } catch (error: any) {
+      if (isTransientError(error)) {
+        this.log.debug(`Failed to get pets (${describeError(error)})`);
+      } else {
+        this.log.error(`Failed to get pets: ${describeError(error)}`);
+      }
       throw error;
     }
   }
@@ -236,6 +282,7 @@ export class TryFiAPI {
     areaName: string | null;
     placeName: string | null;
     placeAddress: string | null;
+    locationUnknown: boolean;
   }> {
     const query = `
       query {
@@ -281,84 +328,81 @@ export class TryFiAPI {
 
       if (response.data.errors) {
         this.log.warn(`Failed to get location for pet ${petId}:`, response.data.errors[0].message);
-        return {
-          latitude: 0,
-          longitude: 0,
-          areaName: null,
-          placeName: null,
-          placeAddress: null,
-        };
+        return this.locationFallback(petId);
       }
 
       const activity = response.data.data?.pet?.ongoingActivity;
-      if (!activity) {
-        return {
-          latitude: 0,
-          longitude: 0,
-          areaName: null,
-          placeName: null,
-          placeAddress: null,
-        };
-      }
 
-      const areaName = activity.areaName || null;
       let latitude = 0;
       let longitude = 0;
-      let placeName = null;
-      let placeAddress = null;
+      let areaName: string | null = null;
+      let placeName: string | null = null;
+      let placeAddress: string | null = null;
 
-      if (activity.__typename === 'OngoingRest') {
-        latitude = activity.position?.latitude || 0;
-        longitude = activity.position?.longitude || 0;
-        placeName = activity.place?.name || null;
-        placeAddress = activity.place?.address || null;
-      } else if (activity.__typename === 'OngoingWalk' && activity.positions?.length > 0) {
-        const lastPosition = activity.positions[activity.positions.length - 1];
-        latitude = lastPosition.position?.latitude || 0;
-        longitude = lastPosition.position?.longitude || 0;
+      if (activity) {
+        areaName = activity.areaName || null;
+
+        if (activity.__typename === 'OngoingRest') {
+          latitude = activity.position?.latitude || 0;
+          longitude = activity.position?.longitude || 0;
+          placeName = activity.place?.name || null;
+          placeAddress = activity.place?.address || null;
+        } else if (activity.__typename === 'OngoingWalk' && activity.positions?.length > 0) {
+          const lastPosition = activity.positions[activity.positions.length - 1];
+          latitude = lastPosition.position?.latitude || 0;
+          longitude = lastPosition.position?.longitude || 0;
+        }
       }
 
       const locationData = { latitude, longitude, areaName, placeName, placeAddress };
-      
+
       // Cache this successful location data
       this.locationCache.set(petId, locationData);
-      
-      return locationData;
+
+      return { ...locationData, locationUnknown: false };
     } catch (error: any) {
       // Handle different error types for location queries
-      if (error.code === 'ECONNABORTED') {
-        // Timeout errors - common when TryFi API is slow
-        this.log.debug(`Location query timed out for pet ${petId}, using cached/default location`);
-      } else if (error.response?.status) {
-        const status = error.response.status;
-        // Transient server errors
-        if (status === 502 || status === 503 || status === 504) {
-          this.log.debug(`Location API temporarily unavailable for pet ${petId} (${status})`);
-        } else {
-          this.log.warn(`Failed to get location for pet ${petId} (HTTP ${status})`);
-        }
+      if (isTransientError(error)) {
+        // Transient network/server errors - expected to resolve on their own
+        this.log.debug(`Location query failed for pet ${petId} (${describeError(error)}), using cached/default location`);
       } else {
-        // Other errors - log message only, not full error object
-        this.log.warn(`Failed to get location for pet ${petId}: ${error.message || 'Unknown error'}`);
+        // Other errors - log a short message only, not the full error object
+        this.log.warn(`Failed to get location for pet ${petId}: ${describeError(error)}`);
       }
-      
-      // Return cached data if available, otherwise return safe defaults
-      // IMPORTANT: Using cached placeName prevents false escape alerts on timeouts
-      const cached = this.locationCache.get(petId);
-      if (cached) {
-        this.log.debug(`Using cached location for pet ${petId}`);
-        return cached;
-      }
-      
-      // No cache available - return defaults (first time seeing this pet)
-      return {
-        latitude: 0,
-        longitude: 0,
-        areaName: null,
-        placeName: null,  // null is safe here - no previous data to rely on
-        placeAddress: null,
-      };
+
+      return this.locationFallback(petId);
     }
+  }
+
+  /**
+   * Fallback location data when a location query fails or returns errors.
+   * Returns the last known good location if available (with locationUnknown:
+   * false, since that data is still meaningful), or safe zeroed defaults with
+   * locationUnknown: true when nothing is cached yet - so callers know not to
+   * treat placeName: null as a real "out of zone" reading.
+   */
+  private locationFallback(petId: string): {
+    latitude: number;
+    longitude: number;
+    areaName: string | null;
+    placeName: string | null;
+    placeAddress: string | null;
+    locationUnknown: boolean;
+  } {
+    const cached = this.locationCache.get(petId);
+    if (cached) {
+      this.log.debug(`Using cached location for pet ${petId}`);
+      return { ...cached, locationUnknown: false };
+    }
+
+    return {
+      latitude: 0,
+      longitude: 0,
+      areaName: null,
+      placeName: null,
+      placeAddress: null,
+      locationUnknown: true,
+    };
   }
 
   /**

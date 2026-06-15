@@ -7,7 +7,7 @@ import {
   Service,
   Characteristic,
 } from 'homebridge';
-import { TryFiAPI } from './api';
+import { TryFiAPI, isTransientError, describeError } from './api';
 import { TryFiCollarAccessory } from './accessory';
 import { TryFiPlatformConfig, TryFiPet } from './types';
 
@@ -29,6 +29,11 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   // Escape alert hysteresis tracking (in-memory only, resets on restart)
   private escapeCounters: Map<string, number> = new Map();
   private quickCheckTimeouts: Map<string, NodeJS.Timeout> = new Map();
+
+  // Connectivity tracking - used to raise StatusFault on accessories if the
+  // TryFi API has been unreachable for a sustained period (not just a blip)
+  private lastSuccessfulPollTime: number = Date.now();
+  private connectivityFaulted = false;
 
   constructor(
     public readonly log: Logger,
@@ -78,6 +83,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
       // Login and get pets
       await this.tryfiApi.login();
       const allPets = await this.tryfiApi.getPets();
+      this.recordPollSuccess();
 
       // Filter out ignored pets (case-insensitive)
       const ignoredPets = (this.config.ignoredPets || []).map(name => name.toLowerCase());
@@ -169,23 +175,25 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
       this.startPolling();
     } catch (error: any) {
       // Handle different error types during discovery
+
+      // Transient network/server errors - warn and start polling anyway (will retry)
+      if (isTransientError(error)) {
+        this.log.warn(`TryFi API temporarily unavailable (${describeError(error)}) during startup`);
+        this.log.warn('Will continue to retry during polling');
+        this.recordPollFailure();
+        this.startPolling(); // Start polling anyway, will retry
+        return;
+      }
+
       if (error.response?.status) {
         const status = error.response.status;
-        
-        // Transient server errors - warn and start polling anyway (will retry)
-        if (status === 502 || status === 503 || status === 504) {
-          this.log.warn(`TryFi API temporarily unavailable (${status}) during startup`);
-          this.log.warn('Will continue to retry during polling');
-          this.startPolling(); // Start polling anyway, will retry
-          return;
-        }
-        
+
         // Authentication errors
         if (status === 401 || status === 403) {
           this.log.error('Authentication failed - please check your username and password');
           return;
         }
-        
+
         this.log.error(`Failed to discover TryFi devices (HTTP ${status}):`, error.message);
       } else {
         this.log.error('Failed to discover TryFi devices:', error.message || error);
@@ -218,6 +226,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   private async pollDevices() {
     try {
       const allPets = await this.tryfiApi.getPets();
+      this.recordPollSuccess();
 
       // Filter out ignored pets (case-insensitive)
       const ignoredPets = (this.config.ignoredPets || []).map(name => name.toLowerCase());
@@ -227,7 +236,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
         const accessory = this.collarAccessories.get(pet.petId);
         if (accessory) {
           accessory.updatePetData(pet);
-          
+
           // Handle escape alert hysteresis
           this.handleEscapeDetection(pet);
         }
@@ -236,15 +245,17 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
       this.log.debug(`Updated ${pets.length} collar(s)`);
     } catch (error: any) {
       // Handle different error types appropriately
+
+      // Transient network/server errors - just warn and retry next interval
+      if (isTransientError(error)) {
+        this.log.warn(`TryFi API temporarily unavailable (${describeError(error)}), will retry on next poll`);
+        this.recordPollFailure();
+        return;
+      }
+
       if (error.response?.status) {
         const status = error.response.status;
-        
-        // Transient server errors (502, 503, 504) - just warn and retry next interval
-        if (status === 502 || status === 503 || status === 504) {
-          this.log.warn(`TryFi API temporarily unavailable (${status}), will retry on next poll`);
-          return;
-        }
-        
+
         // Authentication errors (401, 403) - try to re-authenticate
         if (status === 401 || status === 403) {
           this.log.warn('Authentication expired, attempting to re-login...');
@@ -253,6 +264,7 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
             this.log.info('Successfully re-authenticated with TryFi');
             // Try polling again immediately after re-auth
             const allPets = await this.tryfiApi.getPets();
+            this.recordPollSuccess();
             const ignoredPets = (this.config.ignoredPets || []).map(name => name.toLowerCase());
             const pets = allPets.filter(pet => !ignoredPets.includes(pet.name.toLowerCase()));
             for (const pet of pets) {
@@ -279,10 +291,59 @@ export class TryFiPlatform implements DynamicPlatformPlugin {
   }
 
   /**
+   * Record a successful poll, clearing the connectivity fault if it was set.
+   */
+  private recordPollSuccess() {
+    this.lastSuccessfulPollTime = Date.now();
+
+    if (this.connectivityFaulted) {
+      this.connectivityFaulted = false;
+      this.setConnectivityFault(false);
+      this.log.info('TryFi API connectivity restored');
+    }
+  }
+
+  /**
+   * Record a failed poll. If the API has been unreachable for longer than
+   * apiUnreachableAlertMinutes, raise StatusFault on accessories so users can
+   * automate on it (e.g. a notification), without touching the escape state.
+   */
+  private recordPollFailure() {
+    if (this.connectivityFaulted) {
+      return;
+    }
+
+    const thresholdMinutes = this.config.apiUnreachableAlertMinutes ?? 5;
+    const elapsedMs = Date.now() - this.lastSuccessfulPollTime;
+
+    if (elapsedMs >= thresholdMinutes * 60 * 1000) {
+      this.connectivityFaulted = true;
+      this.setConnectivityFault(true);
+      this.log.warn(`TryFi API has been unreachable for over ${thresholdMinutes} minute(s)`);
+    }
+  }
+
+  /**
+   * Raise or clear the connectivity StatusFault on every collar accessory.
+   */
+  private setConnectivityFault(faulted: boolean) {
+    for (const accessory of this.collarAccessories.values()) {
+      accessory.setConnectivityFault(faulted);
+    }
+  }
+
+  /**
    * Handle escape detection with hysteresis (debouncing)
    * Prevents false alarms from GPS drift by requiring multiple consecutive detections
    */
   private handleEscapeDetection(pet: TryFiPet) {
+    // Skip entirely if location is unknown this poll (e.g. transient network
+    // error with nothing cached yet) - don't let a missing-data placeholder
+    // count toward the escape confirmation threshold.
+    if (pet.locationUnknown) {
+      return;
+    }
+
     // Check if pet is escaped (out of zone AND not with anyone)
     const isEscaped = (pet.placeName === null && pet.connectedToUser === null);
     

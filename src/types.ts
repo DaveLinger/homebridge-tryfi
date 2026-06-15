@@ -13,6 +13,7 @@ export interface TryFiPlatformConfig extends PlatformConfig {
   escapeCheckInterval?: number; // seconds between quick checks, default 30
   offlineAlertMinutes?: number; // minutes offline before alerting, disabled if unset
   offlineAlertType?: 'leak' | 'motion'; // default 'motion'; blank/omitted disables offline alert
+  apiUnreachableAlertMinutes?: number; // minutes of consecutive poll failures before raising StatusFault, default 5
 }
 
 /**
@@ -43,6 +44,9 @@ export interface TryFiPet {
   areaName: string | null;
   placeName: string | null; // Safe zone name, null when not in safe zone
   placeAddress: string | null;
+  // True when the location query failed and there's no cached location to fall
+  // back on - placeName/areaName etc. are meaningless defaults, not real data.
+  locationUnknown: boolean;
 }
 
 /**
