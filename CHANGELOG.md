@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-06-15
+
+### Added
+- **API Unreachable Alert**: New `apiUnreachableAlertMinutes` config option (default: 5)
+  - Raises `StatusFault` on each pet's Escape Alert sensor once the TryFi API
+    has been unreachable for longer than this threshold
+  - Clears automatically (with a log line) once polling succeeds again
+  - Lets you build a HomeKit automation/notification for sustained TryFi
+    outages without touching the escape (leak/motion) characteristic itself
+
+### Fixed
+- **Verbose error logs on 502s**: `getPets()` no longer dumps the entire
+  AxiosError object (including circular HTTP/TLS internals) on failures —
+  logs a short one-line description instead
+- **Transient network errors treated consistently**: DNS failures
+  (`EAI_AGAIN`, `ENOTFOUND`) and dropped connections (`ECONNRESET`,
+  `ECONNREFUSED`, `ETIMEDOUT`, `ECONNABORTED`) are now handled the same as
+  502/503/504 — logged concisely and retried quietly on the next poll
+- **Potential false escape alert on transient location errors**: if a
+  location query fails and there's no cached location yet (e.g. a DNS hiccup
+  on a pet's first-ever poll), the escape check is now skipped for that poll
+  instead of treating the missing data as "out of zone"
+
 ## [1.2.0] - 2026-01-29
 
 ### Added

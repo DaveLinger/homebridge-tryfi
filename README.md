@@ -20,6 +20,23 @@ This plugin exposes your TryFi dog collars to HomeKit with the following accesso
   - Configurable hysteresis prevents false alarms from GPS noise
 - **Collar Offline Alert** - Notifies you when the collar loses connectivity for longer than a threshold you set — something the official Fi app never does
 
+## What's New in v1.4.0
+
+### API Unreachable Alert
+
+The TryFi API occasionally has outages (502s, DNS hiccups, etc.). Brief blips are now handled silently and retried on the next poll — but if the API stays unreachable past a configurable threshold, the plugin sets `StatusFault` on each pet's **Escape Alert** sensor:
+
+```json
+"apiUnreachableAlertMinutes": 5
+```
+
+This is a separate HomeKit characteristic from the escape state itself, so you can automate on "TryFi connectivity problem" without it being confused with "my dog escaped." The fault clears automatically once polling succeeds again.
+
+### More Robust Error Handling
+
+- Transient errors (502/503/504, DNS failures, dropped connections) are now logged concisely and retried quietly instead of dumping a huge error object
+- Fixed an edge case where a transient location-lookup error with no cached data could trigger a false escape alert
+
 ## What's New in v1.3.0
 
 ### Collar Offline Alerts
@@ -113,6 +130,7 @@ Add this to your Homebridge `config.json`:
       "escapeCheckInterval": 30,
       "offlineAlertMinutes": 15,
       "offlineAlertType": "motion",
+      "apiUnreachableAlertMinutes": 5,
       "ignoredPets": []
     }
   ]
@@ -133,6 +151,7 @@ Add this to your Homebridge `config.json`:
 | `escapeCheckInterval` | No | `30` | 10-120 | Seconds between quick re-checks |
 | `offlineAlertMinutes` | No | `15` | 1-60 | Minutes offline before triggering alert |
 | `offlineAlertType` | No | `"motion"` | leak/motion | Sensor type for offline alerts; omit to disable |
+| `apiUnreachableAlertMinutes` | No | `5` | 1-60 | Minutes the TryFi API must be unreachable before flagging `StatusFault` on each pet's Escape Alert sensor |
 | `ignoredPets` | No | `[]` | - | Array of pet names to exclude |
 
 ### Escape Alert Types
@@ -238,6 +257,11 @@ Or reduce confirmations (less GPS protection):
 ## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
+
+**v1.4.0**
+- API Unreachable Alert — `StatusFault` on the Escape Alert sensor after sustained TryFi API outages (configurable threshold)
+- More robust handling of transient errors (502/503/504, DNS failures, dropped connections) — concise logging, quiet retries
+- Fixed a false-escape-alert edge case from transient location lookup errors
 
 **v1.3.0**
 - Collar offline alert — configurable HomeKit sensor when collar loses connectivity
